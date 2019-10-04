@@ -1,0 +1,82 @@
+{
+  "name": "@chameleoncloud/jupyterlab-chameleon",
+  "version": "0.0.1",
+  "description": "JupyterLab extension for the Chameleon testbed",
+  "keywords": [
+    "jupyter",
+    "jupyterlab",
+    "jupyterlab-extension",
+    "chameleon",
+    "computer science",
+    "research"
+  ],
+  "homepage": "https://github.com/ChameleonCloud/jupyterlab-chameleon",
+  "bugs": {
+    "url": "https://github.com/ChameleonCloud/jupyterlab-chameleon/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChameleonCloud/jupyterlab-chameleon.git"
+  },
+  "license": "None",
+  "author": "University of Chicago",
+  "files": [
+    "lib/*/*d.ts",
+    "lib/*/*.js",
+    "lib/*.d.ts",
+    "lib/*.js",
+    "style/**/*.*",
+    "schema/*.json"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "style": "style/index.css",
+  "directories": {
+    "lib": "lib/"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "prettier": "prettier --write '**/*{.ts,.tsx,.js,.jsx,.css,.json,.md}'",
+    "test": "make tests",
+    "watch": "tsc -w"
+  },
+  "lint-staged": {
+    "**/*{.ts,.tsx,.css,.json,.md}": [
+      "prettier --write",
+      "git add"
+    ]
+  },
+  "dependencies": {
+    "@jupyterlab/application": "^1.1.0",
+    "@jupyterlab/apputils": "*",
+    "@jupyterlab/coreutils": "*",
+    "@jupyterlab/filebrowser": "*",
+    "@jupyterlab/fileeditor": "*",
+    "@jupyterlab/mainmenu": "*",
+    "@jupyterlab/notebook": "*",
+    "@jupyterlab/services": "*",
+    "@jupyterlab/ui-components": "*",
+    "@phosphor/coreutils": "*",
+    "@phosphor/widgets": "*"
+  },
+  "devDependencies": {
+    "@types/react": "^16.8.22",
+    "@types/react-dom": "^16.8.4",
+    "husky": "^2.4.1",
+    "lint-staged": "^8.2.1",
+    "prettier": "^1.18.2",
+    "rimraf": "^2.6.3",
+    "tslint": "^5.18.0",
+    "tslint-config-prettier": "^1.18.0",
+    "tslint-plugin-prettier": "^2.0.1",
+    "typescript": "~3.5.1"
+  },
+  "resolutions": {
+    "@types/react": "~16.4.13"
+  },
+  "jupyterlab": {
+    "extension": true,
+    "schemaDir": "schema"
+  }
+}

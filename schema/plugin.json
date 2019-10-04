@@ -1,0 +1,9 @@
+{
+  "jupyter.lab.setting-icon-class": "jp-TextEditorIcon",
+  "jupyter.lab.setting-icon-label": "Chameleon",
+  "title": "Chameleon Extension",
+  "description": "Chameleon extension settings.",
+  "properties": {},
+  "additionalProperties": false,
+  "type": "object"
+}
