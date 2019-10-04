@@ -52,6 +52,10 @@ export class CodeCellExtension
 
     const switcher = new CellBindingSwitcher(panel.content, bindings);
     panel.toolbar.insertBefore('spacer', 'changeBinding', switcher);
+    // Hide the binding switch UI for non-code cells.
+    panel.content.activeCellChanged.connect((notebook, cell) => {
+      switcher.setHidden(cell.model.type !== 'code');
+    });
 
     panel.model.cells.changed.connect((cells, changed) => {
       switch (changed.type) {
@@ -76,14 +80,19 @@ export class CodeCellExtension
       }
     });
 
-    // panel.toolbar.insertItem(0, 'runAll', button);
-    return new DisposableDelegate(() => {
-      // button.dispose();
-    });
+    return new DisposableDelegate(() => null);
   }
 }
 
 namespace Private {
+  /**
+   * Update a cell's display according to its binding. Each binding
+   * has its own distinct visual look so that cells belonging to the same
+   * binding are visually similar.
+   *
+   * @param widget the Cell widget
+   * @param bindings an ordered list of all known bindings
+   */
   export function updateCellDisplay(widget: Cell, bindings: IBindingModel[]) {
     const cellBindingName = widget.model.metadata.get('binding_name');
     const indexOf = bindings.findIndex(({ name }) => name === cellBindingName);
