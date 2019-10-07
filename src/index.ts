@@ -3,7 +3,7 @@ import {
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 
-import { Cell } from '@jupyterlab/cells';
+import { Cell, ICellModel } from '@jupyterlab/cells';
 
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 
@@ -15,7 +15,7 @@ import { CellBindingSwitcher } from './toolbar-extension';
 
 const METADATA_NAMESPACE = 'chameleon';
 
-const bindingNameMetadataKey = () => `${METADATA_NAMESPACE}.binding_name`;
+const BINDING_NAME_METADATA_KEY = `${METADATA_NAMESPACE}.binding_name`;
 
 /**
  * The plugin registration information.
@@ -33,6 +33,35 @@ export interface IBindingModel {
   readonly name: string;
 }
 
+export interface ICellMetadata {
+  hasBinding(cell: ICellModel): boolean;
+  setBindingName(cell: ICellModel, name: string): void;
+  getBindingName(cell: ICellModel): string;
+  onBindingNameChanged(cell: ICellModel, fn: () => void): void;
+}
+
+export class CellMetadata implements ICellMetadata {
+  hasBinding(cell: ICellModel) {
+    return cell.metadata.has(BINDING_NAME_METADATA_KEY);
+  }
+
+  setBindingName(cell: ICellModel, name: string) {
+    cell.metadata.set(BINDING_NAME_METADATA_KEY, name);
+  }
+
+  getBindingName(cell: ICellModel) {
+    return cell.metadata.get(BINDING_NAME_METADATA_KEY) as string;
+  }
+
+  onBindingNameChanged(cell: ICellModel, fn: () => void) {
+    cell.metadata.changed.connect((metadata, changed) => {
+      if (changed.key === BINDING_NAME_METADATA_KEY) {
+        fn();
+      }
+    });
+  }
+}
+
 /**
  * A notebook widget extension that adds a button to the toolbar.
  */
@@ -45,7 +74,7 @@ export class CodeCellExtension
     panel: NotebookPanel,
     context: DocumentRegistry.IContext<INotebookModel>
   ): IDisposable {
-    // TODO: this needs to be pulled remotely somehow, 
+    // TODO: this needs to be pulled remotely somehow,
     // and it needs to subscribe to updates from somewhere
     // (the kernel?)
     const bindings = [
@@ -55,11 +84,9 @@ export class CodeCellExtension
       { name: 'uc_client' }
     ] as IBindingModel[];
 
-    const switcher = new CellBindingSwitcher(
-      panel.content,
-      bindings,
-      bindingNameMetadataKey
-    );
+    const metadata = new CellMetadata();
+
+    const switcher = new CellBindingSwitcher(panel.content, bindings, metadata);
     panel.toolbar.insertBefore('spacer', 'changeBinding', switcher);
     // Hide the binding switch UI for non-code cells.
     panel.content.activeCellChanged.connect((notebook, cell) => {
@@ -76,11 +103,18 @@ export class CodeCellExtension
               w => w.model === cellModel
             );
 
-            Private.updateCellDisplay(cellWidget, bindings);
-            cellModel.metadata.changed.connect((metadata, changed) => {
-              if (changed.key === bindingNameMetadataKey()) {
-                Private.updateCellDisplay(cellWidget, bindings);
-              }
+            if (changed.newIndex > 0 && !metadata.hasBinding(cellModel)) {
+              // Copy cell binding from previous cell
+              const previousCell = cells.get(changed.newIndex - 1);
+              metadata.setBindingName(
+                cellModel,
+                metadata.getBindingName(previousCell)
+              );
+            }
+
+            Private.updateCellDisplay(cellWidget, metadata, bindings);
+            metadata.onBindingNameChanged(cellModel, () => {
+              Private.updateCellDisplay(cellWidget, metadata, bindings);
             });
           }
           break;
@@ -102,8 +136,12 @@ namespace Private {
    * @param widget the Cell widget
    * @param bindings an ordered list of all known bindings
    */
-  export function updateCellDisplay(widget: Cell, bindings: IBindingModel[]) {
-    const cellBindingName = widget.model.metadata.get(bindingNameMetadataKey());
+  export function updateCellDisplay(
+    widget: Cell,
+    cellMeta: ICellMetadata,
+    bindings: IBindingModel[]
+  ) {
+    const cellBindingName = cellMeta.getBindingName(widget.model);
     const indexOf = bindings.findIndex(({ name }) => name === cellBindingName);
     if (indexOf > -1) {
       CELL_CLASSES.forEach(cls => widget.removeClass(cls));

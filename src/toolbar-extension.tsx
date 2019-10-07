@@ -6,7 +6,7 @@ import { HTMLSelect } from '@jupyterlab/ui-components';
 
 import { ReactWidget } from '@jupyterlab/apputils';
 import { ChameleonActions } from './actions';
-import { IBindingModel } from '.';
+import { IBindingModel, ICellMetadata } from '.';
 
 const TOOLBAR_CELLBINDING_CLASS = 'chi-Notebook-toolbarCellBindingDropdown';
 
@@ -20,13 +20,13 @@ export class CellBindingSwitcher extends ReactWidget {
   constructor(
     widget: Notebook,
     bindings: IBindingModel[],
-    metadataKey: () => string
+    cellMeta: ICellMetadata
   ) {
     super();
     this.addClass(TOOLBAR_CELLBINDING_CLASS);
     this._notebook = widget;
     this._bindings = bindings;
-    this._metadataKey = metadataKey;
+    this._cellMeta = cellMeta;
     if (widget.model) {
       this.update();
     }
@@ -42,7 +42,7 @@ export class CellBindingSwitcher extends ReactWidget {
     if (event.target.value !== '-') {
       ChameleonActions.changeCellBinding(
         this._notebook,
-        this._metadataKey,
+        this._cellMeta,
         event.target.value
       );
       this._notebook.activate();
@@ -61,9 +61,7 @@ export class CellBindingSwitcher extends ReactWidget {
   render() {
     let value = '-';
     if (this._notebook.activeCell) {
-      value = this._notebook.activeCell.model.metadata.get(
-        this._metadataKey()
-      ) as string;
+      value = this._cellMeta.getBindingName(this._notebook.activeCell.model);
     }
 
     return (
@@ -78,8 +76,7 @@ export class CellBindingSwitcher extends ReactWidget {
         aria-label='Binding'
         minimal
       >
-        <option value='-'>-</option>
-        <option value='_meta'>META</option>
+        <option value='-'>META</option>
         {this._bindings.map(({ name }) => (
           <option value={name}>{name}</option>
         ))}
@@ -89,5 +86,5 @@ export class CellBindingSwitcher extends ReactWidget {
 
   private _notebook: Notebook = null;
   private _bindings: IBindingModel[] = [];
-  private _metadataKey: () => string;
+  private _cellMeta: ICellMetadata = null;
 }

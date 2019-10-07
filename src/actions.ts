@@ -1,4 +1,5 @@
 import { Notebook } from '@jupyterlab/notebook';
+import { ICellMetadata } from '.';
 
 export namespace ChameleonActions {
   /**
@@ -6,13 +7,13 @@ export namespace ChameleonActions {
    */
   export function changeCellBinding(
     notebook: Notebook,
-    metadataKey: () => string,
+    cellMeta: ICellMetadata,
     binding: string
   ): void {
     if (!notebook.model || !notebook.activeCell) {
       return;
     }
 
-    notebook.activeCell.model.metadata.set(metadataKey(), binding);
+    cellMeta.setBindingName(notebook.activeCell.model, binding);
   }
 }
