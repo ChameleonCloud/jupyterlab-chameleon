@@ -17,11 +17,16 @@ export class CellBindingSwitcher extends ReactWidget {
   /**
    * Construct a new cell type switcher.
    */
-  constructor(widget: Notebook, bindings: IBindingModel[]) {
+  constructor(
+    widget: Notebook,
+    bindings: IBindingModel[],
+    metadataKey: () => string
+  ) {
     super();
     this.addClass(TOOLBAR_CELLBINDING_CLASS);
     this._notebook = widget;
     this._bindings = bindings;
+    this._metadataKey = metadataKey;
     if (widget.model) {
       this.update();
     }
@@ -35,7 +40,11 @@ export class CellBindingSwitcher extends ReactWidget {
    */
   handleChange = (event: React.ChangeEvent<HTMLSelectElement>): void => {
     if (event.target.value !== '-') {
-      ChameleonActions.changeCellBinding(this._notebook, event.target.value);
+      ChameleonActions.changeCellBinding(
+        this._notebook,
+        this._metadataKey,
+        event.target.value
+      );
       this._notebook.activate();
     }
   };
@@ -52,7 +61,9 @@ export class CellBindingSwitcher extends ReactWidget {
   render() {
     let value = '-';
     if (this._notebook.activeCell) {
-      value = this._notebook.activeCell.model.metadata.get('binding_name') as string;
+      value = this._notebook.activeCell.model.metadata.get(
+        this._metadataKey()
+      ) as string;
     }
 
     return (
@@ -78,4 +89,5 @@ export class CellBindingSwitcher extends ReactWidget {
 
   private _notebook: Notebook = null;
   private _bindings: IBindingModel[] = [];
+  private _metadataKey: () => string;
 }

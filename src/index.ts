@@ -13,6 +13,10 @@ import { IDisposable, DisposableDelegate } from '@phosphor/disposable';
 
 import { CellBindingSwitcher } from './toolbar-extension';
 
+const METADATA_NAMESPACE = 'chameleon';
+
+const bindingNameMetadataKey = () => `${METADATA_NAMESPACE}.binding_name`;
+
 /**
  * The plugin registration information.
  */
@@ -22,6 +26,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
   autoStart: true
 };
 
+// Generate class names for binding display modifiers
 const CELL_CLASSES = [...Array(10).keys()].map(n => `chi-binding-${n}`);
 
 export interface IBindingModel {
@@ -50,7 +55,11 @@ export class CodeCellExtension
       { name: 'uc_client' }
     ] as IBindingModel[];
 
-    const switcher = new CellBindingSwitcher(panel.content, bindings);
+    const switcher = new CellBindingSwitcher(
+      panel.content,
+      bindings,
+      bindingNameMetadataKey
+    );
     panel.toolbar.insertBefore('spacer', 'changeBinding', switcher);
     // Hide the binding switch UI for non-code cells.
     panel.content.activeCellChanged.connect((notebook, cell) => {
@@ -69,7 +78,7 @@ export class CodeCellExtension
 
             Private.updateCellDisplay(cellWidget, bindings);
             cellModel.metadata.changed.connect((metadata, changed) => {
-              if (changed.key === 'binding_name') {
+              if (changed.key === bindingNameMetadataKey()) {
                 Private.updateCellDisplay(cellWidget, bindings);
               }
             });
@@ -94,7 +103,7 @@ namespace Private {
    * @param bindings an ordered list of all known bindings
    */
   export function updateCellDisplay(widget: Cell, bindings: IBindingModel[]) {
-    const cellBindingName = widget.model.metadata.get('binding_name');
+    const cellBindingName = widget.model.metadata.get(bindingNameMetadataKey());
     const indexOf = bindings.findIndex(({ name }) => name === cellBindingName);
     if (indexOf > -1) {
       CELL_CLASSES.forEach(cls => widget.removeClass(cls));
