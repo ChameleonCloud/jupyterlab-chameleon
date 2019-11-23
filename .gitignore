@@ -4,6 +4,9 @@ build/
 dist/
 *.egg-info
 
+# Virtualenv
+venv/
+
 # JS build files + deps
 lib/
 node_modules/
