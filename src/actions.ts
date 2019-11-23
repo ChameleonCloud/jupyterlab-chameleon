@@ -2,10 +2,7 @@ import { Notebook } from '@jupyterlab/notebook';
 import { ICellMetadata } from '.';
 
 export namespace ChameleonActions {
-  /**
-   * @param notebook
-   */
-  export function changeCellBinding(
+  export function updateCellBinding(
     notebook: Notebook,
     cellMeta: ICellMetadata,
     binding: string
@@ -15,5 +12,16 @@ export namespace ChameleonActions {
     }
 
     cellMeta.setBindingName(notebook.activeCell.model, binding);
+  }
+
+  export function removeCellBinding(
+    notebook: Notebook,
+    cellMeta: ICellMetadata
+  ) {
+    if (!notebook.model || !notebook.activeCell) {
+      return;
+    }
+
+    cellMeta.removeBinding(notebook.activeCell.model);
   }
 }

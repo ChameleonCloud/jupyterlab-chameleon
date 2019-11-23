@@ -39,14 +39,18 @@ export class CellBindingSwitcher extends ReactWidget {
    * Handle `change` events for the HTMLSelect component.
    */
   handleChange = (event: React.ChangeEvent<HTMLSelectElement>): void => {
-    if (event.target.value !== '-') {
-      ChameleonActions.changeCellBinding(
+    if (event.target.value === '-') {
+      ChameleonActions.removeCellBinding(this._notebook, this._cellMeta);
+    } else {
+      ChameleonActions.updateCellBinding(
         this._notebook,
         this._cellMeta,
         event.target.value
       );
-      this._notebook.activate();
     }
+    // Return focus
+    this._notebook.activate();
+    this.update();
   };
 
   /**
@@ -61,7 +65,10 @@ export class CellBindingSwitcher extends ReactWidget {
   render() {
     let value = '-';
     if (this._notebook.activeCell) {
-      value = this._cellMeta.getBindingName(this._notebook.activeCell.model);
+      const cellModel = this._notebook.activeCell.model;
+      if (this._cellMeta.hasBinding(cellModel)) {
+        value = this._cellMeta.getBindingName(cellModel);
+      }
     }
 
     return (
@@ -78,7 +85,9 @@ export class CellBindingSwitcher extends ReactWidget {
       >
         <option value='-'>META</option>
         {this._bindings.map(({ name }) => (
-          <option value={name}>{name}</option>
+          <option key={name} value={name}>
+            {name}
+          </option>
         ))}
       </HTMLSelect>
     );

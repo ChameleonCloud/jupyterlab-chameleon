@@ -9,9 +9,17 @@ import { DocumentRegistry } from '@jupyterlab/docregistry';
 
 import { NotebookPanel, INotebookModel } from '@jupyterlab/notebook';
 
+import {
+  IObservableList,
+  IObservableJSON,
+  IObservableMap
+} from '@jupyterlab/observables';
+
 import { IDisposable, DisposableDelegate } from '@phosphor/disposable';
 
 import { CellBindingSwitcher } from './toolbar-extension';
+import { JSONValue } from '@phosphor/coreutils';
+import { Slot } from '@phosphor/signaling';
 
 const METADATA_NAMESPACE = 'chameleon';
 
@@ -36,11 +44,12 @@ export interface IBindingModel {
 export interface ICellMetadata {
   hasBinding(cell: ICellModel): boolean;
   setBindingName(cell: ICellModel, name: string): void;
+  removeBinding(cell: ICellModel): void;
   getBindingName(cell: ICellModel): string;
   onBindingNameChanged(cell: ICellModel, fn: () => void): void;
 }
 
-export class CellMetadata implements ICellMetadata {
+export class CellMetadata implements ICellMetadata, IDisposable {
   hasBinding(cell: ICellModel) {
     return cell.metadata.has(BINDING_NAME_METADATA_KEY);
   }
@@ -49,17 +58,43 @@ export class CellMetadata implements ICellMetadata {
     cell.metadata.set(BINDING_NAME_METADATA_KEY, name);
   }
 
+  removeBinding(cell: ICellModel) {
+    console.log('removing it');
+    cell.metadata.delete(BINDING_NAME_METADATA_KEY);
+  }
+
   getBindingName(cell: ICellModel) {
     return cell.metadata.get(BINDING_NAME_METADATA_KEY) as string;
   }
 
   onBindingNameChanged(cell: ICellModel, fn: () => void) {
-    cell.metadata.changed.connect((metadata, changed) => {
+    const onChange = (
+      metadata: IObservableJSON,
+      changed: IObservableMap.IChangedArgs<JSONValue>
+    ) => {
+      console.log(metadata, changed);
       if (changed.key === BINDING_NAME_METADATA_KEY) {
         fn();
       }
-    });
+    };
+
+    cell.metadata.changed.connect(onChange);
+    const handlers = this._onBindingNameChangeHandlers.get(cell) || [];
+    this._onBindingNameChangeHandlers.set(cell, handlers.concat([onChange]));
   }
+
+  isDisposed: boolean = false;
+  dispose() {
+    this._onBindingNameChangeHandlers.forEach((list, cell) => {
+      list.forEach(fn => cell.metadata.changed.disconnect(fn));
+    });
+    this.isDisposed = true;
+  }
+
+  private _onBindingNameChangeHandlers: Map<
+    ICellModel,
+    Slot<IObservableJSON, IObservableMap.IChangedArgs<JSONValue>>[]
+  > = new Map();
 }
 
 /**
@@ -84,16 +119,23 @@ export class CodeCellExtension
       { name: 'uc_client' }
     ] as IBindingModel[];
 
-    const metadata = new CellMetadata();
+    const cellMetadata = new CellMetadata();
 
-    const switcher = new CellBindingSwitcher(panel.content, bindings, metadata);
+    const switcher = new CellBindingSwitcher(
+      panel.content,
+      bindings,
+      cellMetadata
+    );
     panel.toolbar.insertBefore('spacer', 'changeBinding', switcher);
     // Hide the binding switch UI for non-code cells.
     panel.content.activeCellChanged.connect((notebook, cell) => {
-      switcher.setHidden(cell.model.type !== 'code');
+      switcher.setHidden(!!cell && cell.model.type !== 'code');
     });
 
-    panel.model.cells.changed.connect((cells, changed) => {
+    const onCellsChanged = (
+      cells: IObservableList<ICellModel>,
+      changed: IObservableList.IChangedArgs<ICellModel>
+    ) => {
       switch (changed.type) {
         case 'add':
           const cellModel = cells.get(changed.newIndex);
@@ -103,27 +145,33 @@ export class CodeCellExtension
               w => w.model === cellModel
             );
 
-            if (changed.newIndex > 0 && !metadata.hasBinding(cellModel)) {
+            if (changed.newIndex > 0 && !cellMetadata.hasBinding(cellModel)) {
               // Copy cell binding from previous cell
               const previousCell = cells.get(changed.newIndex - 1);
-              metadata.setBindingName(
+              cellMetadata.setBindingName(
                 cellModel,
-                metadata.getBindingName(previousCell)
+                cellMetadata.getBindingName(previousCell)
               );
             }
 
-            Private.updateCellDisplay(cellWidget, metadata, bindings);
-            metadata.onBindingNameChanged(cellModel, () => {
-              Private.updateCellDisplay(cellWidget, metadata, bindings);
+            Private.updateCellDisplay(cellWidget, cellMetadata, bindings);
+            cellMetadata.onBindingNameChanged(cellModel, () => {
+              Private.updateCellDisplay(cellWidget, cellMetadata, bindings);
             });
           }
           break;
         default:
           break;
       }
-    });
+    };
 
-    return new DisposableDelegate(() => null);
+    panel.model.cells.changed.connect(onCellsChanged);
+
+    return new DisposableDelegate(() => {
+      panel.model.cells.changed.disconnect(onCellsChanged);
+      cellMetadata.dispose();
+      switcher.dispose();
+    });
   }
 }
 
@@ -143,8 +191,10 @@ namespace Private {
   ) {
     const cellBindingName = cellMeta.getBindingName(widget.model);
     const indexOf = bindings.findIndex(({ name }) => name === cellBindingName);
+
+    CELL_CLASSES.forEach(cls => widget.removeClass(cls));
+
     if (indexOf > -1) {
-      CELL_CLASSES.forEach(cls => widget.removeClass(cls));
       widget.addClass(CELL_CLASSES[indexOf]);
     }
   }

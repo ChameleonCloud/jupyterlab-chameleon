@@ -1,3 +1,10 @@
+# Python build files
+__pycache__/
+build/
+dist/
+*.egg-info
+
+# JS build files + deps
 lib/
 node_modules/
 package-lock.json
