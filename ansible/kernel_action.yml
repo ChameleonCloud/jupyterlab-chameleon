@@ -1,0 +1,4 @@
+---
+- hosts: KERNEL
+  roles:
+    - "{{ kernel_name }}"

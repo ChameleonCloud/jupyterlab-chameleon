@@ -1,0 +1,2 @@
+---
+- include_tasks: "{{ kernel_action }}.yml"

@@ -4,6 +4,10 @@ from IPython.core.magic import (
     line_magic,
 )
 
+# MAGICS:
+# %binding
+# %fetch binding_name <loc>
+
 @magics_class
 class BindingMagics(Magics):
     def __init__(self, shell, binding_manager):

@@ -7,6 +7,7 @@ from functools import partial
 from ipykernel.jsonutil import json_clean
 from ipykernel.ipkernel import IPythonKernel
 from ipython_genutils import py3compat
+from jupyter_client.connect import tunnel_to_kernel
 from jupyter_client.ioloop.manager import IOLoopKernelManager
 from jupyter_client.multikernelmanager import MultiKernelManager
 from jupyter_client.threaded import ThreadedKernelClient, ThreadedZMQSocketChannel
@@ -47,8 +48,23 @@ class MultiplexerKernelClient(ThreadedKernelClient):
     iopub_channel_class = Type(MultiplexerZMQSocketChannel)
 
 
+import ansible_runner
+
 class MultiplexerKernelManager(IOLoopKernelManager):
     client_class = "hydra_kernel.kernel.MultiplexerKernelClient"
+
+    def _launch_kernel(self, kernel_cmd, **kw):
+        # Write inventory?
+        ansible_runner.run(
+            private_data_dir='ansible', 
+            playbook='kernel_action.yml', 
+            extra_vars=dict(kernel_action='start')
+        )
+        # Can SSH to the remote host and launch the kernel there...
+        # then write the connection file remotely...
+        # then see which ports were selected...
+        # then tunnel to those ports over SSH...
+        return super(MultiplexerKernelManager, self)._launch_kernel(kernel_cmd, **kw)
 
 
 class MultiplexerMultiKernelManager(MultiKernelManager):
@@ -109,6 +125,20 @@ class ProxyComms(object):
             self._reply_content = content
 
 
+def spawn_kernel(kernel_manager):
+    kernel_id = kernel_manager.start_kernel('bash')
+    km = kernel_manager.get_kernel(kernel_id)
+
+    try:
+        kc = km.client()
+        # Only connect shell and iopub channels
+        kc.start_channels(shell=True, iopub=True, stdin=False, hb=False)
+    except RuntimeError:
+        km.shutdown_kernel()
+        raise
+
+    return km, kc
+    
 class HydraKernel(IPythonKernel):
     """
     Hydra Kernel
@@ -154,12 +184,7 @@ class HydraKernel(IPythonKernel):
         # Check if binding name is valid (is there a binding set up?)
         if binding_name not in self._kernels:
             self.log.debug("Creating sub-kernel for %s", binding_name)
-            kernel_id = self.kernel_manager.start_kernel('bash')
-            km = self.kernel_manager.get_kernel(kernel_id)
-            kc = km.client()
-            # Only connect shell and iopub channels
-            kc.start_channels(shell=True, iopub=True, stdin=False, hb=False)
-            self._kernels[binding_name] = (km, kc)
+            self._kernels[binding_name] = spawn_kernel(self.kernel_manager)
 
         km, kc = self._kernels[binding_name]
 
@@ -173,6 +198,8 @@ class HydraKernel(IPythonKernel):
         kc.iopub_channel.pipe(proxy.on_iopub_message)
         kc.shell_channel.pipe(proxy.on_shell_message)
 
+        # This will effectively block, but perhaps that is a good thing.
+        # Without blocking, it seems to allow multiple cells to execute in parallel.
         while not proxy.reply_content:
             time.sleep(0.1)
 
@@ -182,12 +209,3 @@ class HydraKernel(IPythonKernel):
 
         if not silent and reply_content["status"] == "error" and stop_on_error:
             yield self._abort_queues()
-
-        # try:
-        #     kc.shell_channel.send(msg)
-        # except RuntimeError:
-        #     LOG.exception("Killing kernel")
-        #     self.log.exception("Failed to proxy message to sub kernel")
-        #     kc.stop_channels()
-        #     km.shutdown_kernel()
-        #     raise

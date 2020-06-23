@@ -1,0 +1,11 @@
+---
+- easy_install:
+    name: pip
+    state: latest
+
+- pip:
+    name: ipython
+    virtualenv: "{{ kernel_virtualenv }}"
+
+- command:
+    cmd: "{{ kernel_virtualenv }}/bin/python -m ipykernel install"

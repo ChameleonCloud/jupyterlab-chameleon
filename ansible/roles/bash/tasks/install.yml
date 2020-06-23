@@ -1,0 +1,11 @@
+---
+- easy_install:
+    name: pip
+    state: latest
+    
+- pip:
+    name: bash_kernel
+    virtualenv: "{{ kernel_virtualenv }}"
+
+- script:
+    cmd: "{{ kernel_virtualenv }}/bin/python -m bash_kernel.install"
