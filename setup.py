@@ -12,12 +12,12 @@ HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text()
 
 setup_args = dict(
-    name="hydra_kernel",
-    description="A Jupyter Notebook kernel allowing multiple remote kernel switching",
+    name="jupyterlab-chameleon",
+    description="JupyterLab extensions for the Chameleon testbed",
     version="0.0.1",
     author="University of Chicago",
     author_email="dev@chameleoncloud.org",
-    url="https://github.com/chameleoncloud/hydra_kernel",
+    url="https://github.com/chameleoncloud/jupyterlab-chameleon",
     license="MIT",
     platforms="Linux, Mac OS X, Windows",
     keywords=["jupyter", "ipython", "kernel"],
@@ -40,6 +40,11 @@ setup_args = dict(
     ],
     include_package_data=True,
     long_description_content_type="text/markdown",
+    entry_points={
+        'bash_kernel.tasks': [
+            'refresh_oauth_token = jupyterlab_chameleon.extensions.bash_kernel:refresh_oauth_token_task'
+        ]
+    }
 )
 
 if __name__ == "__main__":
