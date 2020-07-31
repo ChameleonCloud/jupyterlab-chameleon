@@ -2,24 +2,18 @@ import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
-
 import { Cell, ICellModel } from '@jupyterlab/cells';
-
 import { DocumentRegistry } from '@jupyterlab/docregistry';
-
-import { NotebookPanel, INotebookModel } from '@jupyterlab/notebook';
-
+import { INotebookModel, NotebookPanel } from '@jupyterlab/notebook';
 import {
-  IObservableList,
   IObservableJSON,
+  IObservableList,
   IObservableMap
 } from '@jupyterlab/observables';
-
-import { IDisposable, DisposableDelegate } from '@phosphor/disposable';
-
+import { JSONValue } from '@lumino/coreutils';
+import { DisposableDelegate, IDisposable } from '@lumino/disposable';
+import { Slot } from '@lumino/signaling';
 import { CellBindingSwitcher } from './toolbar-extension';
-import { JSONValue } from '@phosphor/coreutils';
-import { Slot } from '@phosphor/signaling';
 
 const METADATA_NAMESPACE = 'chameleon';
 

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { Notebook } from '@jupyterlab/notebook';
 
-import { HTMLSelect } from '@jupyterlab/ui-components';
+import { caretDownIcon, HTMLSelect } from '@jupyterlab/ui-components';
 
 import { ReactWidget } from '@jupyterlab/apputils';
 import { ChameleonActions } from './actions';
@@ -77,11 +77,8 @@ export class CellBindingSwitcher extends ReactWidget {
         onChange={this.handleChange}
         onKeyDown={this.handleKeyDown}
         value={value}
-        iconProps={{
-          icon: <span className='jp-MaterialIcon jp-DownCaretIcon bp3-icon' />
-        }}
+        icon={caretDownIcon}
         aria-label='Binding'
-        minimal
       >
         <option value='-'>META</option>
         {this._bindings.map(({ name }) => (
