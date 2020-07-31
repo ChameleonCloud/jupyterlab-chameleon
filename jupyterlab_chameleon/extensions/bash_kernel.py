@@ -8,7 +8,7 @@ def refresh_oauth_token_task():
     relatively short lifetime.
     """
     def task_fn():
-        hub_url = os.getenv('JUPYTERHUB_BASE_URL')
+        hub_url = os.getenv('JUPYTERHUB_PUBLIC_URL')
         hub_token = os.getenv('JUPYTERHUB_API_TOKEN')
 
         if not (hub_url and hub_token):

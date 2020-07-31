@@ -34,8 +34,11 @@ setup_args = dict(
     zip_safe=False,
     install_requires=[
         "ansible-runner",
+        "ipykernel",
         "ipython>=5.0.0",
         "jupyter_client",
+        "keystoneauth1",
+        "python-swiftclient",
         "remote_ikernel",
     ],
     include_package_data=True,
