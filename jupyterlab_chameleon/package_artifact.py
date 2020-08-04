@@ -2,7 +2,6 @@ import argparse
 import json
 import hashlib
 import os
-import requests
 import tempfile
 import zipfile
 
@@ -16,6 +15,7 @@ from traitlets import Any, CRegExp, Unicode
 from traitlets.config import Configurable
 
 from .exception import AuthenticationError
+from .util import refresh_access_token
 
 import logging
 LOG = logging.getLogger(__name__)
@@ -44,19 +44,7 @@ def default_keystone_session_factory():
     # the token as a fake CLI arg so the loader understands it takes priority
     # over any value discovered in the env.
     if os.getenv('OS_AUTH_TYPE') == 'v3oidcaccesstoken':
-        hub_api_url = os.getenv('JUPYTERHUB_API_URL')
-        hub_token = os.getenv('JUPYTERHUB_API_TOKEN')
-
-        if not (hub_api_url and hub_token):
-            raise AuthenticationError('Missing JupyterHub authentication info')
-
-        res = requests.get(f'{hub_api_url}/tokens',
-            headers={'authorization': f'token {hub_token}'})
-        access_token = res.json().get('access_token')
-
-        if not access_token:
-            raise AuthenticationError(f'Failed to get access token: {res}')
-
+        access_token = refresh_access_token()
         fake_argv.append(f'--os-access-token={access_token}')
 
     args = parser.parse_args(fake_argv)

@@ -45,7 +45,7 @@ setup_args = dict(
     long_description_content_type="text/markdown",
     entry_points={
         'bash_kernel.tasks': [
-            'refresh_oauth_token = jupyterlab_chameleon.extensions.bash_kernel:refresh_oauth_token_task'
+            'refresh_access_token = jupyterlab_chameleon.extensions.bash_kernel:refresh_access_token_task'
         ]
     }
 )
