@@ -5,10 +5,13 @@ dist/
 *.egg-info
 
 # Virtualenv
-venv/
+.tox/
 
 # JS build files + deps
 lib/
 node_modules/
 package-lock.json
-yarn-lock.json
+yarn.lock
+
+# Log files
+/*.log
