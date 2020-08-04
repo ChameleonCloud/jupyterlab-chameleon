@@ -1,3 +1,4 @@
+import argparse
 import json
 import hashlib
 import os
@@ -5,6 +6,7 @@ import requests
 import tempfile
 import zipfile
 
+from keystoneauth1 import loading
 from keystoneauth1.exceptions.http import Unauthorized
 from keystoneauth1.identity import v3
 from keystoneauth1.session import Session
@@ -22,18 +24,6 @@ LOG = logging.getLogger(__name__)
 def default_keystone_session_factory():
     """Obtain authentication credentials for the Swift service.
 
-    Args:
-        hub_url (str): the JupyterHub public URL. Defaults to value of
-            ``JUPYTERHUB_PUBLIC_URL``.
-        hub_token (str): a JupyterHub server token that can authenticate to
-            the JupyterHub. Defaults to value of ``JUPYTERHUB_API_TOKEN``.
-        auth_url (str): the Keystone service URL to authenticate against.
-            Defaults to value of ``OS_AUTH_URL``.
-        identity_provider (str): the Keystone identity provider to authenticate
-            against. Deafults to value of ``OS_IDENTITY_PROVIDER``.
-        protocol (str): the Keystone federation protocol to use. Defaults to
-            value of ``OS_PROTOCOL``.
-
     Returns:
         keystoneauth1.session.Session: a KSA session object, which can be used
             to authenticate the Swift client.
@@ -42,31 +32,35 @@ def default_keystone_session_factory():
         AuthenticationError: if not enough parameters are specified, or if
             the access token cannot be refreshed from the identity provider.
     """
+    # We are abusing the KSA loading mechanism here. The arg parser will default
+    # the various OpenStack auth params from the environment, which is what
+    # we're after.
+    fake_argv = []
+    parser = argparse.ArgumentParser()
+    loading.cli.register_argparse_arguments(
+        parser, fake_argv, default='token')
 
-    hub_url = os.getenv('JUPYTERHUB_PUBLIC_URL')
-    hub_token = os.getenv('JUPYTERHUB_API_TOKEN')
+    # For OIDC tokens, ensure we fetch a fresh token before proceeding. Override
+    # the token as a fake CLI arg so the loader understands it takes priority
+    # over any value discovered in the env.
+    if os.getenv('OS_AUTH_TYPE') == 'v3oidcaccesstoken':
+        hub_api_url = os.getenv('JUPYTERHUB_API_URL')
+        hub_token = os.getenv('JUPYTERHUB_API_TOKEN')
 
-    if not (hub_url and hub_token):
-        raise AuthenticationError('Missing JupyterHub authentication info')
+        if not (hub_api_url and hub_token):
+            raise AuthenticationError('Missing JupyterHub authentication info')
 
-    auth_url = os.getenv('OS_AUTH_URL')
-    identity_provider = os.getenv('OS_IDENTITY_PROVIDER')
-    protocol = os.getenv('OS_PROTOCOL')
+        res = requests.get(f'{hub_api_url}/tokens',
+            headers={'authorization': f'token {hub_token}'})
+        access_token = res.json().get('access_token')
 
-    if not (ks_auth_url and ks_identity_provider and ks_protocol):
-        raise AuthenticationError('Missing Keystone authentication parameters')
+        if not access_token:
+            raise AuthenticationError(f'Failed to get access token: {res}')
 
-    res = requests.get(f'{hub_url}services/oauth-refresh/tokens', headers={
-        'authorization': f'token {hub_token}'
-    })
-    access_token = res.json().get('access_token')
+        fake_argv.append(f'--os-access-token={access_token}')
 
-    if not access_token:
-        raise AuthenticationError(f'Failed to get access token: {res}')
-
-    auth = v3.oidc.OidcAccessToken(
-        auth_url=auth_url, access_token=access_token,
-        identity_provider=identity_provider, protocol=protocol)
+    args = parser.parse_args(fake_argv)
+    auth = loading.cli.load_from_argparse_arguments(args)
     return Session(auth=auth)
 
 
@@ -149,7 +143,7 @@ class Archiver:
         conn = Connection(session=session)
 
         h = hashlib.blake2b(digest_size=16)
-        h.update(auth.access_token)
+        h.update(session.get_token())
         h.update(path)
         artifact_id = h.hexdigest()
 
