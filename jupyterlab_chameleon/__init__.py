@@ -2,7 +2,7 @@ import logging
 
 from notebook.utils import url_path_join
 
-from .package_artifact import PackageArtifactEndpoint
+from .package_artifact import PackageArtifactHandler
 
 LOG = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ def load_jupyter_server_extension(nb_server_app):
     package_endpoint = url_path_join(base_endpoint, 'package_artifact')
 
     handlers = [
-        (package_endpoint, ZenodoUploadHandler,
-            {"notebook_dir": nb_server_app.notebook_dir}),
+        (package_endpoint, PackageArtifactHandler,
+            {'notebook_dir': nb_server_app.notebook_dir}),
     ]
     web_app.add_handlers('.*$', handlers)
