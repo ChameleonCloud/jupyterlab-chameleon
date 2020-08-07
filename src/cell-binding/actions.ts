@@ -1,6 +1,6 @@
 import { Notebook } from '@jupyterlab/notebook';
 
-import { ICellMetadata } from '.';
+import { ICellMetadata } from './tokens';
 
 export namespace ChameleonActions {
   export function updateCellBinding(

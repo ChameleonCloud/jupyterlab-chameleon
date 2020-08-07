@@ -1,5 +1,5 @@
 import {
-  JupyterFrontEnd
+  JupyterFrontEnd, JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 
 import { Cell, ICellModel } from '@jupyterlab/cells';
@@ -157,6 +157,14 @@ export class CodeCellExtension
   }
 }
 
+const plugin: JupyterFrontEndPlugin<void> = {
+  activate(app: JupyterFrontEnd) {
+    app.docRegistry.addWidgetExtension('Notebook', new CodeCellExtension());
+  },
+  id: '@chameleoncloud/jupyterlab-chameleon:codeCellPlugin',
+  autoStart: true
+};
+
 namespace Private {
   /**
    * Update a cell's display according to its binding. Each binding
@@ -182,11 +190,4 @@ namespace Private {
   }
 }
 
-/**
- * Activate the extension.
- */
-function activate(app: JupyterFrontEnd) {
-  app.docRegistry.addWidgetExtension('Notebook', new CodeCellExtension());
-}
-
-export default activate;
+export default plugin;

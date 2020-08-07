@@ -8,7 +8,7 @@ import { ReactWidget } from '@jupyterlab/apputils';
 
 import { ChameleonActions } from './actions';
 
-import { IBindingModel, ICellMetadata } from '.';
+import { IBindingModel, ICellMetadata } from './tokens';
 
 const TOOLBAR_CELLBINDING_CLASS = 'chi-Notebook-toolbarCellBindingDropdown';
 

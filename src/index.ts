@@ -2,18 +2,15 @@ import {
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 
-import activateCellBindingPlugin from './cell-binding';
+import artifactSharingPlugin from './artifact-sharing';
 
-const cellBindingPlugin: JupyterFrontEndPlugin<void> = {
-  activate: activateCellBindingPlugin,
-  id: '@chameleoncloud/jupyterlab-chameleon:codeCellPlugin',
-  autoStart: true
-};
+import cellBindingPlugin from './cell-binding';
 
 /**
  * Export the plugins as default.
  */
 const plugins: JupyterFrontEndPlugin<any>[] = [
+  artifactSharingPlugin,
   cellBindingPlugin
 ];
 
