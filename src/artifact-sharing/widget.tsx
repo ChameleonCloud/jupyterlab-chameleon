@@ -1,6 +1,5 @@
-import * as React from 'react';
-
 import { ReactWidget } from '@jupyterlab/apputils';
+import * as React from 'react';
 
 export class ArtifactSharingWidget extends ReactWidget {
   constructor() {

@@ -1,27 +1,20 @@
 import {
-  JupyterFrontEnd,
-  JupyterFrontEndPlugin,
-  ILayoutRestorer
+  ILayoutRestorer, JupyterFrontEnd,
+  JupyterFrontEndPlugin
 } from '@jupyterlab/application';
-
 import {
   ICommandPalette,
   MainAreaWidget,
   WidgetTracker
 } from '@jupyterlab/apputils';
-
-import { ISettingRegistry } from '@jupyterlab/settingregistry';
-
+import { FileBrowser, IFileBrowserFactory } from '@jupyterlab/filebrowser';
 import { IMainMenu } from '@jupyterlab/mainmenu';
-
-import { Menu } from '@lumino/widgets';
-
-import { IFileBrowserFactory, FileBrowser } from '@jupyterlab/filebrowser';
 import { Contents } from '@jupyterlab/services';
-
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
+import { Menu } from '@lumino/widgets';
 import { ArtifactSharingWidget } from './widget';
 
-const pluginId = '@chameleoncloud/jupyterlab-chameleon:artifact-sharing';
+const PLUGIN_ID = '@chameleoncloud/jupyterlab-chameleon:artifact-sharing';
 
 function createOpener(
   app: JupyterFrontEnd,
@@ -47,11 +40,11 @@ function createOpener(
 
     widget.update();
     app.shell.activateById(widget.id);
-  }
+  };
 }
 
 const plugin: JupyterFrontEndPlugin<void> = {
-  id: pluginId,
+  id: PLUGIN_ID,
   requires: [
     ISettingRegistry,
     ICommandPalette,
@@ -67,7 +60,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     mainMenu: IMainMenu,
     fileBrowserFactory: IFileBrowserFactory
   ): void {
-    Promise.all([settingRegistry.load(pluginId), app.restored])
+    Promise.all([settingRegistry.load(PLUGIN_ID), app.restored])
       .then(async ([settings]) => {
         const browser = fileBrowserFactory.defaultBrowser;
         const tracker = new WidgetTracker<MainAreaWidget<ArtifactSharingWidget>>({

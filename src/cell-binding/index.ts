@@ -1,27 +1,16 @@
-import {
-  JupyterFrontEnd, JupyterFrontEndPlugin
-} from '@jupyterlab/application';
-
+import { JupyterFrontEnd, JupyterFrontEndPlugin } from '@jupyterlab/application';
 import { Cell, ICellModel } from '@jupyterlab/cells';
-
 import { DocumentRegistry } from '@jupyterlab/docregistry';
-
 import { INotebookModel, NotebookPanel } from '@jupyterlab/notebook';
-
 import {
   IObservableJSON,
   IObservableList,
   IObservableMap
 } from '@jupyterlab/observables';
-
 import { JSONValue } from '@lumino/coreutils';
-
 import { DisposableDelegate, IDisposable } from '@lumino/disposable';
-
 import { Slot } from '@lumino/signaling';
-
 import { IBindingModel, ICellMetadata } from './tokens';
-
 import { CellBindingSwitcher } from './toolbar-extension';
 
 const METADATA_NAMESPACE = 'chameleon';

@@ -1,13 +1,8 @@
-import * as React from 'react';
-
-import { Notebook } from '@jupyterlab/notebook';
-
-import { caretDownIcon, HTMLSelect } from '@jupyterlab/ui-components';
-
 import { ReactWidget } from '@jupyterlab/apputils';
-
+import { Notebook } from '@jupyterlab/notebook';
+import { caretDownIcon, HTMLSelect } from '@jupyterlab/ui-components';
+import * as React from 'react';
 import { ChameleonActions } from './actions';
-
 import { IBindingModel, ICellMetadata } from './tokens';
 
 const TOOLBAR_CELLBINDING_CLASS = 'chi-Notebook-toolbarCellBindingDropdown';
