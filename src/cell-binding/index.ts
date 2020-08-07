@@ -20,6 +20,8 @@ import { DisposableDelegate, IDisposable } from '@lumino/disposable';
 
 import { Slot } from '@lumino/signaling';
 
+import { IBindingModel, ICellMetadata } from './tokens';
+
 import { CellBindingSwitcher } from './toolbar-extension';
 
 const METADATA_NAMESPACE = 'chameleon';
@@ -28,18 +30,6 @@ const BINDING_NAME_METADATA_KEY = `${METADATA_NAMESPACE}.binding_name`;
 
 // Generate class names for binding display modifiers
 const CELL_CLASSES = [...Array(10).keys()].map(n => `chi-binding-${n}`);
-
-export interface IBindingModel {
-  readonly name: string;
-}
-
-export interface ICellMetadata {
-  hasBinding(cell: ICellModel): boolean;
-  setBindingName(cell: ICellModel, name: string): void;
-  removeBinding(cell: ICellModel): void;
-  getBindingName(cell: ICellModel): string;
-  onBindingNameChanged(cell: ICellModel, fn: () => void): void;
-}
 
 export class CellMetadata implements ICellMetadata, IDisposable {
   hasBinding(cell: ICellModel) {
