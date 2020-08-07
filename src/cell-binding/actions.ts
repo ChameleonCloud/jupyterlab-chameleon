@@ -1,4 +1,5 @@
 import { Notebook } from '@jupyterlab/notebook';
+
 import { ICellMetadata } from '.';
 
 export namespace ChameleonActions {

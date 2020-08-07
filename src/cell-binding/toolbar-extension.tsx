@@ -5,7 +5,9 @@ import { Notebook } from '@jupyterlab/notebook';
 import { caretDownIcon, HTMLSelect } from '@jupyterlab/ui-components';
 
 import { ReactWidget } from '@jupyterlab/apputils';
+
 import { ChameleonActions } from './actions';
+
 import { IBindingModel, ICellMetadata } from '.';
 
 const TOOLBAR_CELLBINDING_CLASS = 'chi-Notebook-toolbarCellBindingDropdown';
