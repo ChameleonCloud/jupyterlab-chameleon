@@ -6,10 +6,12 @@ import tempfile
 import zipfile
 
 from keystoneauth1 import loading
+from keystoneauth1.adapter import Adapter
 from keystoneauth1.exceptions.http import Unauthorized
 from keystoneauth1.identity import v3
 from keystoneauth1.session import Session
 from notebook.base.handlers import APIHandler
+from swiftclient import Connection
 from tornado import web
 from traitlets import Any, CRegExp, Unicode
 from traitlets.config import Configurable
@@ -128,20 +130,22 @@ class Archiver:
                 Swift.
         """
         session = self.config.keystone_session_factory()
-        conn = Connection(session=session)
+        conn = Connection(session=session, os_options={
+            'region_name': os.getenv('OS_REGION_NAME'),
+        })
 
         h = hashlib.blake2b(digest_size=16)
-        h.update(session.get_token())
-        h.update(path)
+        h.update(session.get_token().encode('utf-8'))
+        h.update(path.encode('utf-8'))
         artifact_id = h.hexdigest()
 
         stat = os.stat(path)
-        size_mb = stat.st_size / 1024
+        size_mb = stat.st_size / 1024 / 1024
         self.log.info((
             f'Uploading {path} ({size_mb:.2f}MB) to Swift '
             f'as {artifact_id}'))
 
-        with open(path, 'r') as f:
+        with open(path, 'rb') as f:
             conn.put_object(
                 self.config.swift_container,
                 artifact_id,
@@ -188,4 +192,5 @@ class PackageArtifactHandler(APIHandler):
         except (AuthenticationError, Unauthorized) as err:
             return self._error_response(401, str(err))
         except Exception as err:
+            self.log.exception('An unknown error occurred')
             return self._error_response(500, str(err))
