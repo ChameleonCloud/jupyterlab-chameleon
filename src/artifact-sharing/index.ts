@@ -12,19 +12,60 @@ import { IMainMenu } from '@jupyterlab/mainmenu';
 import { Contents } from '@jupyterlab/services';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { Menu } from '@lumino/widgets';
+import { IArtifactSharingURL } from './tokens';
 import { ArtifactSharingWidget } from './widget';
 
 const PLUGIN_ID = '@chameleoncloud/jupyterlab-chameleon:artifact-sharing';
 
+export class ArtifactSharingURL implements IArtifactSharingURL {
+  constructor(settings: ISettingRegistry.ISettings) {
+    this._settings = settings;
+  }
+
+  createUrl(artifactId: string): string {
+    return this._makeUrl('externalCreateEndpoint')
+      .replace('{artifactId}', artifactId);
+  }
+  updateUrl(externalId: string): string {
+    return this._makeUrl('externalUpdateEndpoint')
+      .replace('{externalId}', externalId);
+  }
+  newVersionUrl(externalId: string, artifactId: string): string {
+    return this._makeUrl('externalNewVersionEndpoint')
+      .replace('{externalId}', externalId)
+      .replace('{artifactId}', artifactId);
+  }
+
+  isExternalUrl(origin: string): boolean {
+    return this._baseUrl.indexOf(origin) === 0;
+  }
+
+  private get _baseUrl(): string {
+    return this._settings.get('externalBaseUrl').composite as string;
+  }
+  private _makeUrl(endpoint: string): string {
+    const path = this._settings.get(endpoint).composite as string;
+    return this._baseUrl + path;
+  }
+  private _settings: ISettingRegistry.ISettings;
+}
+
 function createOpener(
   app: JupyterFrontEnd,
+  settings: ISettingRegistry.ISettings,
+  browser: FileBrowser,
   tracker: WidgetTracker<MainAreaWidget<ArtifactSharingWidget>>
 ) {
   let widget: MainAreaWidget<ArtifactSharingWidget>;
 
   return async () => {
+    const item = browser.selectedItems().next();
+    const artifactPath = (item && item.type === 'directory')
+      ? item.path : null;
+
     if (!widget || widget.isDisposed) {
-      const content = new ArtifactSharingWidget();
+      const urlFactory = new ArtifactSharingURL(settings);
+      const content = new ArtifactSharingWidget(artifactPath, urlFactory);
       content.title.label = 'Package artifact';
       widget = new MainAreaWidget({ content });
       widget.id = 'artifact-sharing';
@@ -67,12 +108,12 @@ const plugin: JupyterFrontEndPlugin<void> = {
           namespace: 'artifact-sharing'
         });
 
-        const openWidget = createOpener(app, tracker);
+        const openWidget = createOpener(app, settings, browser, tracker);
 
         app.commands.addCommand(CommandIDs.create, {
           label: 'Package as new artifact',
           isEnabled() {
-            return Private.currentItemIsShared(browser);
+            return Private.currentItemNotShared(browser);
           },
           async execute() {
             await openWidget();
@@ -183,8 +224,8 @@ namespace Private {
   }
 
   export function currentItemArtifact(browser: FileBrowser) {
-    const item = browser.selectedItems().next();
-    const path = (item && item.path) || '';
+    // const item = browser.selectedItems().next();
+    // const path = (item && item.path) || '';
     // return zenodoRegistry.getDeposition(path).then(record => {
     //   if (!record) {
     //     throw Error(`No deposition exists at path "${path}"`);

@@ -1,0 +1,30 @@
+{
+  "jupyter.lab.setting-icon-class": "jp-TextEditorIcon",
+  "jupyter.lab.setting-icon-label": "Chameleon: Sharing",
+  "title": "Chameleon: Sharing",
+  "description": "Settings for the experiment packaging and sharing on Chameleon.",
+  "properties": {
+    "externalBaseUrl": {
+      "type": "string",
+      "title": "Base URL for external editing of artifacts",
+      "default": "http://localhost:8890/share"
+    },
+    "externalCreateEndpoint": {
+      "type": "string",
+      "title": "Endpoint for creating new artifacts",
+      "default": "/create/embed?artifact_id={artifactId}&artifact_repo=chameleon"
+    },
+    "externalUpdateEndpoint": {
+      "type": "string",
+      "title": "Endpoint for updating existing artifacts",
+      "default": "/{externalId}/edit/embed"
+    },
+    "externalNewVersionEndpoint": {
+      "type": "string",
+      "title": "Endpoint for adding new version to existing artifact",
+      "default": "/{externalId}/edit/embed?new_version&artifact_id{artifactId}&artifact_repo=chameleon"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object"
+}

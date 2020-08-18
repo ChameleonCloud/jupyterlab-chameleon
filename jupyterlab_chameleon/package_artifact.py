@@ -2,11 +2,10 @@ import argparse
 import json
 import hashlib
 import os
+import requests
 import tempfile
 import zipfile
 
-from keystoneauth1 import loading
-from keystoneauth1.adapter import Adapter
 from keystoneauth1.exceptions.http import Unauthorized
 from keystoneauth1.identity import v3
 from keystoneauth1.session import Session
@@ -17,7 +16,7 @@ from traitlets import Any, CRegExp, Unicode
 from traitlets.config import Configurable
 
 from .exception import AuthenticationError
-from .util import refresh_access_token
+from .util import call_jupyterhub_api, refresh_access_token
 
 import logging
 LOG = logging.getLogger(__name__)
@@ -29,28 +28,14 @@ def default_keystone_session_factory():
     Returns:
         keystoneauth1.session.Session: a KSA session object, which can be used
             to authenticate the Swift client.
-
-    Raises:
-        AuthenticationError: if not enough parameters are specified, or if
-            the access token cannot be refreshed from the identity provider.
     """
-    # We are abusing the KSA loading mechanism here. The arg parser will default
-    # the various OpenStack auth params from the environment, which is what
-    # we're after.
-    fake_argv = []
-    parser = argparse.ArgumentParser()
-    loading.cli.register_argparse_arguments(
-        parser, fake_argv, default='token')
-
-    # For OIDC tokens, ensure we fetch a fresh token before proceeding. Override
-    # the token as a fake CLI arg so the loader understands it takes priority
-    # over any value discovered in the env.
-    if os.getenv('OS_AUTH_TYPE') == 'v3oidcaccesstoken':
-        access_token = refresh_access_token()
-        fake_argv.append(f'--os-access-token={access_token}')
-
-    args = parser.parse_args(fake_argv)
-    auth = loading.cli.load_from_argparse_arguments(args)
+    res = call_jupyterhub_api('share/publish_token')
+    auth_url = res.get('auth_url')
+    token = res.get('token')
+    trust_id = res.get('trust_id')
+    if not (auth_url and token and trust_id):
+        raise AuthenticationError('Failed to retrieve publish token')
+    auth = v3.Token(auth_url=auth_url, token=token, trust_id=trust_id)
     return Session(auth=auth)
 
 
@@ -178,7 +163,7 @@ class PackageArtifactHandler(APIHandler):
             path = os.path.normpath(path)
 
             archiver = Archiver(self.handler_config, log=self.log)
-            archive_id = archiver.publish(archiver.package(path))
+            artifact_id = archiver.publish(archiver.package(path))
 
             self.set_status(200)
             self.write(dict(artifact_id=artifact_id))
