@@ -59,6 +59,7 @@ class PackageArtifactConfig(Configurable):
 
 
 class Archiver:
+    MAX_ARCHIVE_SIZE = 1024 * 1024 * 100  # 100MB
     MIME_TYPE = 'application/zip'
 
     def __init__(self, config: 'PackageArtifactConfig', log=None):
@@ -82,20 +83,29 @@ class Archiver:
         def should_include(file):
             return not self.config.ignored_file_pattern.search(file)
 
+        if not os.path.isdir(path):
+            raise ValueError('Input path must be a directory')
+
         temp_dir = tempfile.mkdtemp()
         archive = os.path.join(temp_dir, f'{os.path.basename(path)}.zip')
+        total_size = 0
 
         with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            if os.path.isfile(path) and should_include(path):
-                zipf.write(path)
-            elif os.path.isdir(path):
-                for root, _, files in os.walk(path):
-                    for f in files:
-                        absfile = os.path.join(root, f)
-                        if should_include(absfile):
-                            zipf.write(absfile)
+            for root, _, files in os.walk(path):
+                for f in files:
+                    absfile = os.path.join(root, f)
+                    if not should_include(absfile):
+                        continue
+                    if not os.path.islink(absfile):
+                        total_size += os.path.getsize(absfile)
+                        if total_size > self.MAX_ARCHIVE_SIZE:
+                            raise ValueError('Exceeded max archive size')
+                    # Remove leading path information
+                    zipf.write(absfile, arcname=absfile.replace(path, ''))
 
-        self.log.info(f'Exported archive of {path} at {archive}')
+        size_mb = total_size / 1024 / 1024
+        self.log.info(
+            f'Exported archive of {path} at {archive} (total {size_mb:.2f}MB)')
 
         return archive
 
