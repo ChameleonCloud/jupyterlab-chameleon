@@ -22,6 +22,13 @@ export class ArtifactSharingURL implements IArtifactSharingURL {
     this._settings = settings;
   }
 
+  indexUrl(): string {
+    return this._baseUrl;
+  }
+  detailUrl(externalId: string): string {
+    return this._makeUrl('externalDetailEndpoint')
+      .replace('{externalId}', externalId);
+  }
   createUrl(artifactId: string): string {
     return this._makeUrl('externalCreateEndpoint')
       .replace('{artifactId}', artifactId);

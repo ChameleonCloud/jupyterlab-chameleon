@@ -8,8 +8,7 @@ enum WidgetState {
   CONFIRM_FORM = 'confirm-form',
   EMBED_FORM = 'embed-form',
   WAITING = 'waiting',
-  SUCCESS = 'success',
-  ERROR = 'error'
+  SUCCESS = 'success'
 }
 
 namespace ArtifactSharingComponent {
@@ -58,7 +57,6 @@ export class ArtifactSharingComponent extends React.Component<
   }
 
   onMessage(event: MessageEvent) {
-    console.log(event);
     if (! this.props.urlFactory.isExternalUrl(event.origin)) {
       return;
     }
@@ -88,7 +86,7 @@ export class ArtifactSharingComponent extends React.Component<
       );
 
       if (res.status > 299) {
-        const message = 'An error occurred updating the Zenodo deposition';
+        const message = `HTTP ${res.status} error during artifact upload`;
         throw new ServerConnection.ResponseError(res, message);
       }
 
@@ -104,8 +102,8 @@ export class ArtifactSharingComponent extends React.Component<
       });
     } catch(e) {
       this.setState({
-        currentState: WidgetState.ERROR,
-        errorMessage: `Failed to package artifact: ${e.text}`
+        currentState: WidgetState.CONFIRM_FORM,
+        errorMessage: `Failed to package artifact: ${e.message}`
       });
     }
   }
@@ -133,11 +131,34 @@ export class ArtifactSharingComponent extends React.Component<
 
     return (
       <div className='chi-Expand'>
-        <div style={visibilities[WidgetState.CONFIRM_FORM]}>
+        <div className='chi-ArtifactSharing-Form' style={visibilities[WidgetState.CONFIRM_FORM]}>
           <form onSubmit={this.onSubmit}>
-            The contents of {this.props.artifactPath} will be saved.
-            Are you sure?
-            <button type='submit'>Confirm</button>
+            {this.state.errorMessage &&
+              <div className='chi-ArtifactSharing-ErrorMessage'>
+                {this.state.errorMessage}
+              </div>
+            }
+            <h2>Package new artifact</h2>
+            <p>
+              Packaging your work as an <i>artifact</i> makes it easier to share
+              your Notebook(s) and related files with others. A packaged
+              experiment:
+            </p>
+            <ul>
+              <li>can by &ldquo;replayed&rdquo; by any Chameleon user</li>
+              <li>is displayed in <a href={this.props.urlFactory.indexUrl()} rel='noreferrer' target='_blank'>Chameleon Trovi</a> (artifact sharing system)</li>
+              <li>is initially private to you, but can be shared, either with specific projects, or all users</li>
+              <li>supports versioning, if you ever want to make changes</li>
+            </ul>
+            <p>
+              To learn more about Trovi, and artifact packaging, please refer
+              to the <a href='https://chameleoncloud.readthedocs.io' rel='noreferrer' target='_blank'>Chameleon documentation</a>.
+            </p>
+            <div className='chi-ArtifactSharing-FormActions'>
+              <button className='jp-mod-styled jp-mod-accept' type='submit'>
+                Upload: <code>{this.props.artifactPath}/</code>
+              </button>
+            </div>
           </form>
         </div>
         <div className='chi-Expand' style={visibilities[WidgetState.EMBED_FORM]}>
@@ -146,14 +167,25 @@ export class ArtifactSharingComponent extends React.Component<
               src={this.embedUrl()} />
           }
         </div>
-        <div style={visibilities[WidgetState.WAITING]}>
-          Please wait.
+        <div className='chi-ArtifactSharing-Form' style={visibilities[WidgetState.WAITING]}>
+          <div className='jp-Spinner'>
+            <div className='jp-SpinnerContent'></div>
+            <div className='chi-ArtifactSharing-LoadingMessage'>
+              Please wait while your files are uploaded&hellip;
+            </div>
+          </div>
         </div>
-        <div style={visibilities[WidgetState.SUCCESS]}>
-          Success! You can close this screen.
-        </div>
-        <div style={visibilities[WidgetState.ERROR]}>
-          {this.state.errorMessage}
+        <div className='chi-ArtifactSharing-Form' style={visibilities[WidgetState.SUCCESS]}>
+          <h2>Your artifact was successfully packaged</h2>
+          <p>
+            You can edit your artifact&rsquo;s metadata at any time on Trovi:
+            <a href={this.props.urlFactory.detailUrl(this.state.externalId)} rel='noreferrer' target='_blank'>
+              {this.props.urlFactory.detailUrl(this.state.externalId)}
+            </a>.
+          </p>
+          <p>
+            You can now close this window.
+          </p>
         </div>
       </div>
     );

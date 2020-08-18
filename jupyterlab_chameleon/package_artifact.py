@@ -77,6 +77,9 @@ class Archiver:
             str: absolute path to temporary archive file.
 
         Raises:
+            ValueError: if the input path is not a directory
+            ValueError: if the total size of all files in the directory exceeds
+                a maximum threshold
             PermissionError: on file permission errors encountered
             FileNotFoundError: if the input path does not exist
         """

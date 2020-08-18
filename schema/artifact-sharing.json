@@ -9,6 +9,11 @@
       "title": "Base URL for external editing of artifacts",
       "default": "http://localhost:8890/share"
     },
+    "externalDetailEndpoint": {
+      "type": "string",
+      "title": "Endpoint for viewing artifact",
+      "default": "/{externalId}"
+    },
     "externalCreateEndpoint": {
       "type": "string",
       "title": "Endpoint for creating new artifacts",
