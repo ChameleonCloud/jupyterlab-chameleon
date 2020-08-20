@@ -1,0 +1,86 @@
+:root {
+  --chi-binding0: var(--md-amber-100);
+  --chi-binding1: var(--md-blue-100);
+  --chi-binding2: red;
+  --chi-binding3: green;
+  --chi-binding4: yellow;
+  --chi-binding5: blue;
+}
+
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-0 .jp-Collapser {
+  background: var(--chi-binding0);
+}
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-0 .jp-InputArea-editor {
+  border-color: var(--chi-binding0);
+  box-shadow: inset 0 0 2px var(--chi-binding0);
+}
+.jp-Cell.chi-binding-0 .jp-InputArea-editor {
+  background-color: var(--chi-binding0);
+}
+
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-1 .jp-Collapser {
+  background: var(--chi-binding1);
+}
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-1 .jp-InputArea-editor {
+  border-color: var(--chi-binding1);
+  box-shadow: inset 0 0 2px var(--chi-binding1);
+}
+.jp-Cell.chi-binding-1 .jp-InputArea-editor {
+  background-color: var(--chi-binding1);
+}
+
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-2 .jp-Collapser {
+  background: var(--chi-binding2);
+}
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-2 .jp-InputArea-editor {
+  border-color: var(--chi-binding2);
+  box-shadow: inset 0 0 2px var(--chi-binding2);
+}
+.jp-Cell.chi-binding-2 .jp-InputArea-editor {
+  background-color: var(--chi-binding2);
+}
+
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-3 .jp-Collapser {
+  background: var(--chi-binding3);
+}
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-3 .jp-InputArea-editor {
+  border-color: var(--chi-binding3);
+  box-shadow: inset 0 0 2px var(--chi-binding3);
+}
+.jp-Cell.chi-binding-3 .jp-InputArea-editor {
+  background-color: var(--chi-binding3);
+}
+
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-4 .jp-Collapser {
+  background: var(--chi-binding4);
+}
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-4 .jp-InputArea-editor {
+  border-color: var(--chi-binding4);
+  box-shadow: inset 0 0 2px var(--chi-binding4);
+}
+.jp-Cell.chi-binding-4 .jp-InputArea-editor {
+  background-color: var(--chi-binding4);
+}
+
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-5 .jp-Collapser {
+  background: var(--chi-binding5);
+}
+.jp-Notebook .jp-Cell.jp-mod-active.chi-binding-5 .jp-InputArea-editor {
+  border-color: var(--chi-binding5);
+  box-shadow: inset 0 0 2px var(--chi-binding5);
+}
+.jp-Cell.chi-binding-5 .jp-InputArea-editor {
+  background-color: var(--chi-binding5);
+}
+
+.chi-Notebook-toolbarCellBindingDropdown select {
+  height: 24px;
+  font-size: var(--jp-ui-font-size1);
+  line-height: 14px;
+  border-radius: 0;
+  display: block;
+}
+
+.chi-Notebook-toolbarCellBindingDropdown span {
+  top: 5px !important;
+}
