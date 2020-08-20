@@ -4,14 +4,14 @@ import {
 
 import artifactSharingPlugin from './artifact-sharing';
 
-import cellBindingPlugin from './cell-binding';
+// import cellBindingPlugin from './cell-binding';
 
 /**
  * Export the plugins as default.
  */
 const plugins: JupyterFrontEndPlugin<any>[] = [
-  artifactSharingPlugin,
-  cellBindingPlugin
+  artifactSharingPlugin
+  // cellBindingPlugin
 ];
 
 export default plugins;

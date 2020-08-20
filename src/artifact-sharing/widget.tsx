@@ -178,8 +178,7 @@ export class ArtifactSharingComponent extends React.Component<
         <div className='chi-ArtifactSharing-Form' style={visibilities[WidgetState.SUCCESS]}>
           <h2>Your artifact was successfully packaged</h2>
           <p>
-            You can edit your artifact&rsquo;s metadata at any time on Trovi:
-            <a href={this.props.urlFactory.detailUrl(this.state.externalId)} rel='noreferrer' target='_blank'>
+            You can edit your artifact&rsquo;s metadata at any time on Trovi: <a href={this.props.urlFactory.detailUrl(this.state.externalId)} rel='noreferrer' target='_blank'>
               {this.props.urlFactory.detailUrl(this.state.externalId)}
             </a>.
           </p>

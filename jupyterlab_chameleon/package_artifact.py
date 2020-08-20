@@ -22,21 +22,18 @@ import logging
 LOG = logging.getLogger(__name__)
 
 
-def default_keystone_session_factory():
-    """Obtain authentication credentials for the Swift service.
+def default_prepare_upload():
+    """Prepare an upload to the external storage tier.
 
     Returns:
-        keystoneauth1.session.Session: a KSA session object, which can be used
-            to authenticate the Swift client.
+        dict: a structure with the following keys:
+            :artifact_id: the pre-prepared ID of the new artifact
+            :publish_endpoint: the upload endpoint parameters:
+                :url: the absolute URL to perform the upload
+                :method: the request method
+                :headers: any headers to include in the request
     """
-    res = call_jupyterhub_api('share/publish_token')
-    auth_url = res.get('auth_url')
-    token = res.get('token')
-    trust_id = res.get('trust_id')
-    if not (auth_url and token and trust_id):
-        raise AuthenticationError('Failed to retrieve publish token')
-    auth = v3.Token(auth_url=auth_url, token=token, trust_id=trust_id)
-    return Session(auth=auth)
+    return call_jupyterhub_api('share/prepare_upload')
 
 
 class PackageArtifactConfig(Configurable):
@@ -46,8 +43,8 @@ class PackageArtifactConfig(Configurable):
     # TODO(jason): change to Callable when that trait is in some published
     # trailets release. It is still not being published as part of 4.x[1]
     # [1]: https://github.com/ipython/traitlets/pull/333#issuecomment-639153911
-    keystone_session_factory = Any(config=True,
-        default_value=default_keystone_session_factory,
+    prepare_upload = Any(config=True,
+        default_value=default_prepare_upload,
         help='A ')
 
     ignored_file_pattern = CRegExp(config=True,
@@ -124,32 +121,32 @@ class Archiver:
 
         Raises:
             PermissionError: if the archive cannot be read or accessed.
-            keystoneauth1.ClientException: if an error occurs when uploading to
-                Swift.
+            ValueError: if the prepared upload request is malformed.
+            requests.exceptions.HTTPError: if the upload fails.
         """
-        session = self.config.keystone_session_factory()
-        conn = Connection(session=session, os_options={
-            'region_name': os.getenv('OS_REGION_NAME'),
+        upload = self.config.prepare_upload()
+        artifact_id = upload.get('artifact_id')
+        publish_endpoint = upload.get('publish_endpoint', {})
+        publish_url = publish_endpoint.get('url')
+        publish_method = publish_endpoint.get('method', 'POST')
+        publish_headers = publish_endpoint.get('headers', {})
+        publish_headers.update({
+            'content-type': self.MIME_TYPE,
         })
 
-        h = hashlib.blake2b(digest_size=16)
-        h.update(session.get_token().encode('utf-8'))
-        h.update(path.encode('utf-8'))
-        artifact_id = h.hexdigest()
+        if not (artifact_id and publish_url):
+            raise ValueError('Malformed upload request')
 
         stat = os.stat(path)
         size_mb = stat.st_size / 1024 / 1024
         self.log.info((
-            f'Uploading {path} ({size_mb:.2f}MB) to Swift '
-            f'as {artifact_id}'))
+            f'Uploading {path} ({size_mb:.2f}MB) to {publish_url}'))
 
         with open(path, 'rb') as f:
-            conn.put_object(
-                self.config.swift_container,
-                artifact_id,
-                contents=f,
-                content_type=self.MIME_TYPE,
-            )
+            res = requests.request(
+                url=publish_url, method=publish_method, headers=publish_headers,
+                data=f)
+            res.raise_for_status()
 
         return artifact_id
 
