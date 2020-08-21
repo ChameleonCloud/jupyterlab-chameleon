@@ -7,7 +7,7 @@
     "externalBaseUrl": {
       "type": "string",
       "title": "Base URL for external editing of artifacts",
-      "default": "http://localhost:8890/share"
+      "default": "https://www.chameleoncloud.org/experiment/share"
     },
     "externalDetailEndpoint": {
       "type": "string",
