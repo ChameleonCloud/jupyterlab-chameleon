@@ -81,6 +81,16 @@
   },
   "jupyterlab": {
     "extension": true,
-    "schemaDir": "schema"
+    "schemaDir": "schema",
+    "discovery": {
+      "server": {
+        "managers": [
+          "pip"
+        ],
+        "base": {
+          "name": "jupyterlab_chameleon"
+        }
+      }
+    }
   }
 }

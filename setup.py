@@ -47,7 +47,12 @@ setup_args = dict(
         'bash_kernel.tasks': [
             'refresh_access_token = jupyterlab_chameleon.extensions.bash_kernel:refresh_access_token_task'
         ]
-    }
+    },
+    data_files=[
+        ('etc/jupyter/jupyter_notebook_config.d', [
+            'jupyter-config/jupyter_notebook_config.d/jupyterlab_chameleon.json'
+        ]),
+    ],
 )
 
 if __name__ == "__main__":
