@@ -52,11 +52,9 @@ setup_args = dict(
         ('etc/jupyter/jupyter_notebook_config.d', [
             'jupyter-config/jupyter_notebook_config.d/jupyterlab_chameleon.json'
         ]),
-        # This must match the path expected by jupyterlab_chameleon.init_db
-        ('share/jupyterlab_chameleon', ['db_schema.sql']),
     ],
     package_data={
-        'jupyterlab_chameleon': ['db/schema.sql'],
+        'jupyterlab_chameleon': ['db_schema.sql'],
     },
 )
 
