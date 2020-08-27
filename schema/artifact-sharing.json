@@ -17,7 +17,7 @@
     "externalCreateEndpoint": {
       "type": "string",
       "title": "Endpoint for creating new artifacts",
-      "default": "/create/embed?artifact_id={artifactId}&artifact_repo=chameleon"
+      "default": "/create/embed?deposition_id={depositionId}&deposition_repo={depositionRepo}"
     },
     "externalUpdateEndpoint": {
       "type": "string",
@@ -27,7 +27,7 @@
     "externalNewVersionEndpoint": {
       "type": "string",
       "title": "Endpoint for adding new version to existing artifact",
-      "default": "/{externalId}/edit/embed?new_version&artifact_id{artifactId}&artifact_repo=chameleon"
+      "default": "/{externalId}/edit/embed?new_version&deposition_id={depositionId}&deposition_repo={depositionRepo}"
     }
   },
   "additionalProperties": false,

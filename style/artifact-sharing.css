@@ -47,3 +47,7 @@
   padding: 1rem;
   margin-bottom: 2rem;
 }
+
+.jp-DirListing-item[data-artifact-id] .jp-icon3[fill] {
+  fill: #74a93c;
+}

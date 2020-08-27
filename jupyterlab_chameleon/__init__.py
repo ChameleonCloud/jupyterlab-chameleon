@@ -1,9 +1,13 @@
-import logging
+from importlib import resources
+import os
+import sys
 
 from notebook.utils import url_path_join
 
-from .package_artifact import PackageArtifactHandler
+from .artifact import ArtifactHandler
+from .db import Artifact, DB
 
+import logging
 LOG = logging.getLogger(__name__)
 
 
@@ -20,13 +24,36 @@ def load_jupyter_server_extension(nb_server_app):
         nb_server_app (NotebookApp): handle to the Notebook webserver instance.
     """
     web_app = nb_server_app.web_app
+    notebook_dir = nb_server_app.notebook_dir
+
     # Prepend the base_url so that it works in a jupyterhub setting
     base_url = web_app.settings['base_url']
     base_endpoint = url_path_join(base_url, 'chameleon')
-    package_endpoint = url_path_join(base_endpoint, 'package_artifact')
+    artifact_endpoint = url_path_join(base_endpoint, 'artifacts')
+
+    db = DB(database=f'{notebook_dir}/.chameleon/chameleon.db')
 
     handlers = [
-        (package_endpoint, PackageArtifactHandler,
-            {'notebook_dir': nb_server_app.notebook_dir}),
+        (artifact_endpoint, ArtifactHandler,
+            {'db': db, 'notebook_dir': notebook_dir}),
     ]
     web_app.add_handlers('.*$', handlers)
+
+    init_db(db)
+
+
+def init_db(db: DB):
+    try:
+        with resources.open_text(__name__, 'db_schema.sql') as f:
+            with db.connect() as conn:
+                conn.executescript(f.read())
+        # Also check if there is an initial artifact on the environment.
+        artifact_id = os.getenv('ARTIFACT_ID')
+        if artifact_id:
+            db.insert_artifact(Artifact(
+                path='', id=artifact_id,
+                deposition_repo=os.getenv('ARTIFACT_DEPOSITION_REPO'),
+                ownership=os.getenv('ARTIFACT_OWNERSHIP'),
+            ))
+    except:
+        LOG.exception('Error initializing database')
