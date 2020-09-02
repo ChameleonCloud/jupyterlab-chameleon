@@ -205,6 +205,15 @@ export class ArtifactSharingComponent extends React.Component<
         }
       }
 
+      // Remove deposition_id from artifact, as the presence of this
+      // property is used to determine whether to show the "add new version"
+      // UI, or the "edit" UI. We have now finished with the "add new version"
+      // flow, potentially, so ensure we clean up this property.
+      newState.artifact = {
+        ...newState.artifact,
+        deposition_id: null
+      };
+
       this.setState(newState);
     } else {
       this.props.onCancel();
