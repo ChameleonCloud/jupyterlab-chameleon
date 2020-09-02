@@ -59,10 +59,10 @@ class ArtifactArchiver(LoggingConfigurable):
     swift_container = Unicode(config=True, default_value='trovi',
         help='The name of the Swift container to upload the archive to.')
 
-    max_archive_size = Int(config=True, default_value=(1024 * 1024 * 100),
+    max_archive_size = Int(config=True, default_value=(1024 * 1024 * 500),
         help=('The maximum size of the archive, before compression. The sum of '
               'all file sizes (in bytes) in the archive must be less than this '
-              'number.'))
+              'number. Defaults to 500MB'))
 
     MIME_TYPE = 'application/zip'
 
