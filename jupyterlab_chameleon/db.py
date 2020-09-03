@@ -52,7 +52,7 @@ class DB:
             elif not found:
                 raise ArtifactNotFoundError(
                     'Cannot find artifact at %s', path)
-            updates = [f'{col}=?' for col in ARTIFACT_COLUMNS].join(',')
+            updates = ','.join([f'{col}=?' for col in ARTIFACT_COLUMNS])
             cur.execute(f'update artifacts set {updates} where path=?',
                 tuple(artifact) + (path,))
 
