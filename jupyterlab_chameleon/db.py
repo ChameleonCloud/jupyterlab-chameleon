@@ -1,4 +1,5 @@
-from collections import namedtuple
+from dataclasses import asdict, astuple, dataclass, fields
+from importlib import resources
 import os
 import sqlite3
 
@@ -9,25 +10,41 @@ LOG = logging.getLogger(__name__)
 
 DATABASE_NAME = 'chameleon'
 
-ARTIFACT_COLUMNS = ['id', 'path', 'deposition_repo', 'ownership']
-Artifact = namedtuple('Artifact', ARTIFACT_COLUMNS)
+@dataclass
+class Artifact:
+    id: str
+    path: str
+    deposition_repo: str
+    ownership: str
 
+ARTIFACT_COLUMNS = [f.name for f in fields(Artifact)]
 
 class DB:
+    IN_MEMORY = ':memory:'
+
     def __init__(self, database=None):
         if not database:
             raise ValueError('A database path is required')
-        try:
-            os.makedirs(os.path.dirname(database), exist_ok=True)
-        except:
-            LOG.exception(f'Failed to lazy-create DB path {database}')
+
+        if database != DB.IN_MEMORY:
+            try:
+                os.makedirs(os.path.dirname(database), exist_ok=True)
+            except OSError:
+                LOG.exception(f'Failed to lazy-create DB path {database}')
+
         self.database = database
+        self._conn = None
+
+    def build_schema(self):
+        with resources.open_text(__package__, 'db_schema.sql') as f:
+            with self.connect() as conn:
+                conn.executescript(f.read())
 
     def list_artifacts(self):
         with self.connect() as conn:
             cur = conn.cursor()
             cur.execute(f'select {",".join(ARTIFACT_COLUMNS)} from artifacts')
-            return [dict(Artifact(*row)._asdict()) for row in cur.fetchall()]
+            return [Artifact(*row) for row in cur.fetchall()]
 
     def insert_artifact(self, artifact: Artifact):
         with self.connect() as conn:
@@ -35,7 +52,7 @@ class DB:
             cur.execute(
                 (f'insert into artifacts ({",".join(ARTIFACT_COLUMNS)}) '
                  'values (?, ?, ?, ?)'),
-                tuple(artifact))
+                astuple(artifact))
 
     def update_artifact(self, artifact: Artifact):
         path = artifact.path
@@ -54,7 +71,9 @@ class DB:
                     'Cannot find artifact at %s', path)
             updates = ','.join([f'{col}=?' for col in ARTIFACT_COLUMNS])
             cur.execute(f'update artifacts set {updates} where path=?',
-                tuple(artifact) + (path,))
+                astuple(artifact) + (path,))
 
     def connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.database)
+        if not self._conn:
+            self._conn = sqlite3.connect(self.database)
+        return self._conn

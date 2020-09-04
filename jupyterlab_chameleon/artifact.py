@@ -1,5 +1,6 @@
 import argparse
 from collections import namedtuple
+from dataclasses import asdict
 import json
 import hashlib
 import os
@@ -202,7 +203,7 @@ class ArtifactHandler(APIHandler, ErrorResponder):
 
             self.set_status(200)
             self.write({
-                **artifact._asdict(),
+                **asdict(artifact),
                 'deposition_id': deposition_id
             })
             return self.finish()
@@ -253,7 +254,7 @@ class ArtifactHandler(APIHandler, ErrorResponder):
         self.check_xsrf_cookie()
 
         try:
-            artifacts = self.db.list_artifacts()
+            artifacts = [asdict(a) for a in self.db.list_artifacts()]
             self.set_status(200)
             self.write(dict(artifacts=artifacts))
             return self.finish()

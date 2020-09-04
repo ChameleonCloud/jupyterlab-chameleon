@@ -44,9 +44,7 @@ def load_jupyter_server_extension(nb_server_app):
 
 def init_db(db: DB):
     try:
-        with resources.open_text(__name__, 'db_schema.sql') as f:
-            with db.connect() as conn:
-                conn.executescript(f.read())
+        db.build_schema()
         # Also check if there is an initial artifact on the environment.
         artifact_id = os.getenv('ARTIFACT_ID')
         if artifact_id:
