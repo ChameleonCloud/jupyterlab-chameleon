@@ -25,6 +25,16 @@ export class ArtifactRegistry implements IArtifactRegistry {
       this._serverSettings
     );
 
+    // Remove deposition_id from artifact, as the presence of this
+    // property is used to determine whether to show the "add new version"
+    // UI, or the "edit" UI. We have now finished with the "add new version"
+    // flow, potentially, so ensure we clean up this property.
+    const newArtifact: Artifact = {
+      ...artifact,
+      deposition_id: null
+    };
+    this._updateArtifacts(newArtifact);
+
     await Private.handleUpdateResponse(res);
   }
 

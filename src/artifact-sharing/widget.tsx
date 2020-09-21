@@ -11,7 +11,7 @@ enum WidgetState {
 
 namespace ArtifactSharingComponent {
   export interface IProps {
-    artifact: Artifact;
+    initialArtifact: Artifact;
     workflow: Workflow;
     urlFactory: IArtifactSharingURL;
     artifactRegistry: IArtifactRegistry;
@@ -148,7 +148,7 @@ export class ArtifactSharingComponent extends React.Component<
     }
 
     this.state = {
-      artifact: this.props.artifact,
+      artifact: this.props.initialArtifact,
       currentState: startState,
       errorMessage: null
     };
@@ -204,15 +204,6 @@ export class ArtifactSharingComponent extends React.Component<
           }
         }
       }
-
-      // Remove deposition_id from artifact, as the presence of this
-      // property is used to determine whether to show the "add new version"
-      // UI, or the "edit" UI. We have now finished with the "add new version"
-      // flow, potentially, so ensure we clean up this property.
-      newState.artifact = {
-        ...newState.artifact,
-        deposition_id: null
-      };
 
       this.setState(newState);
     } else {
@@ -286,12 +277,13 @@ export class ArtifactSharingComponent extends React.Component<
     let formText: React.ElementRef<any>;
     let successText: React.ElementRef<any>;
 
-    if (this.state.artifact.id) {
+    // Check if we started from an already-published artifact.
+    if (this.props.initialArtifact.id) {
       formText = <NewArtifactVersionText urlFactory={this.props.urlFactory} />;
-      successText = <NewArtifactVersionSuccessText urlFactory={this.props.urlFactory} artifact={this.props.artifact} />;
+      successText = <NewArtifactVersionSuccessText urlFactory={this.props.urlFactory} artifact={this.state.artifact} />;
     } else {
       formText = <NewArtifactText urlFactory={this.props.urlFactory} />;
-      successText = <NewArtifactSuccessText urlFactory={this.props.urlFactory} artifact={this.props.artifact} />;
+      successText = <NewArtifactSuccessText urlFactory={this.props.urlFactory} artifact={this.state.artifact} />;
     }
 
     return (
@@ -306,7 +298,7 @@ export class ArtifactSharingComponent extends React.Component<
             {formText}
             <div className='chi-ArtifactSharing-FormActions'>
               <button className='jp-mod-styled jp-mod-accept' type='submit'>
-                Upload: <code>{this.props.artifact.path}/</code>
+                Upload: <code>{this.state.artifact.path}/</code>
               </button>
             </div>
           </form>
@@ -357,11 +349,13 @@ export class ArtifactSharingWidget extends ReactWidget {
 
   render() {
     return <ArtifactSharingComponent
-      artifact={this._artifact}
+      initialArtifact={this._artifact}
       workflow={this._workflow}
       urlFactory={this._urlFactory}
       artifactRegistry={this._artifactRegistry}
-      onCancel={this.close.bind(this)}/>
+      // Disposing of a widget added to a MainContentArea will cause the
+      // content area to also dispose of itself (close itself.)
+      onCancel={this.dispose.bind(this)}/>
   }
 
   private _artifact: Artifact;

@@ -30,7 +30,7 @@ export class DirListingRenderer extends DirListing.Renderer {
 
     const artifact = this._artifactRegistry.getArtifactSync(model.path);
 
-    if (artifact) {
+    if (artifact && artifact.id) {
       node.setAttribute('data-artifact-id', artifact.id);
       const artifactText = [
         `Artifact ID: ${artifact.id}`,

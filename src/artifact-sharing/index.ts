@@ -84,7 +84,8 @@ function createOpener(
     if (!widget || widget.isDisposed) {
       const urlFactory = new ArtifactSharingURL(settings);
       const content = new ArtifactSharingWidget(artifact, workflow, urlFactory, artifactRegistry);
-      content.title.label = 'Package artifact';
+      content.title.label = workflow === 'upload'
+        ? 'Package artifact' : 'Edit artifact';
       widget = new MainAreaWidget({ content });
       widget.id = 'artifact-sharing';
     }
