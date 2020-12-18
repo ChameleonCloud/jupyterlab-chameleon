@@ -48,6 +48,11 @@ def init_db(db: DB):
         # Also check if there is an initial artifact on the environment.
         artifact_id = os.getenv('ARTIFACT_ID')
         if artifact_id:
+            # Clear any existing artifacts; this is an ephemeral artifact
+            # environment and it is OK to clean up for sanity. We can't do
+            # this in a "workbench" server because the user may have multiple
+            # artifacts linked to their working directory persisted.
+            db.reset()
             db.insert_artifact(Artifact(
                 path='', id=artifact_id,
                 deposition_repo=os.getenv('ARTIFACT_DEPOSITION_REPO'),

@@ -40,6 +40,11 @@ class DB:
             with self.connect() as conn:
                 conn.executescript(f.read())
 
+    def reset(self):
+        with self.connect() as conn:
+            cur = conn.cursor()
+            cur.execute('delete from artifacts')
+
     def list_artifacts(self):
         with self.connect() as conn:
             cur = conn.cursor()

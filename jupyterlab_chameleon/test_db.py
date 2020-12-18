@@ -52,3 +52,9 @@ class TestDB:
         db = self.init_db()
         with pytest.raises(ArtifactNotFoundError):
             db.update_artifact(self.with_id)
+
+    def test_reset(self):
+        db = self.init_db()
+        db.insert_artifact(self.no_id)
+        db.reset()
+        assert len(db.list_artifacts()) == 0
