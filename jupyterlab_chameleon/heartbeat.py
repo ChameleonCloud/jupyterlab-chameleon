@@ -1,3 +1,4 @@
+from keystoneauth1.exceptions import Unauthorized
 from notebook.base.handlers import APIHandler
 from tornado import web
 
@@ -15,7 +16,7 @@ class HeartbeatHandler(APIHandler, ErrorResponder):
             self.set_status(200)
             self.write({"expires_at": expires_at})
             self.finish()
-        except AuthenticationError as err:
+        except (AuthenticationError, Unauthorized) as err:
             return self.error_response(
                 status=401, message=next(iter(err.args), "Unknown error"),
                 reauthenticate_link=jupyterhub_public_url('auth/refresh'))
