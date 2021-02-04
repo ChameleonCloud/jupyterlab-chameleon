@@ -1,3 +1,5 @@
+import os
+
 from ..util import refresh_access_token
 
 
@@ -8,6 +10,7 @@ def refresh_access_token_task():
     relatively short lifetime.
     """
     def task_fn():
-        os.environ['OS_ACCESS_TOKEN'] = refresh_access_token()
+        access_token, _ = refresh_access_token()
+        os.environ['OS_ACCESS_TOKEN'] = access_token
 
     return task_fn, {'interval_s': 120}

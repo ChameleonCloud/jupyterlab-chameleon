@@ -1,4 +1,4 @@
-from dataclasses import asdict, astuple, dataclass, fields
+from dataclasses import astuple, dataclass, fields
 from importlib import resources
 import os
 import sqlite3

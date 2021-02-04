@@ -1,11 +1,10 @@
-from importlib import resources
 import os
-import sys
 
 from notebook.utils import url_path_join
 
 from .artifact import ArtifactHandler
 from .db import Artifact, DB
+from .heartbeat import HeartbeatHandler
 
 import logging
 LOG = logging.getLogger(__name__)
@@ -30,12 +29,14 @@ def load_jupyter_server_extension(nb_server_app):
     base_url = web_app.settings['base_url']
     base_endpoint = url_path_join(base_url, 'chameleon')
     artifact_endpoint = url_path_join(base_endpoint, 'artifacts')
+    heartbeat_endpoint = url_path_join(base_endpoint, 'heartbeat')
 
     db = DB(database=f'{notebook_dir}/.chameleon/chameleon.db')
 
     handlers = [
         (artifact_endpoint, ArtifactHandler,
             {'db': db, 'notebook_dir': notebook_dir}),
+        (heartbeat_endpoint, HeartbeatHandler),
     ]
     web_app.add_handlers('.*$', handlers)
 
@@ -58,5 +59,5 @@ def init_db(db: DB):
                 deposition_repo=os.getenv('ARTIFACT_DEPOSITION_REPO'),
                 ownership=os.getenv('ARTIFACT_OWNERSHIP'),
             ))
-    except:
+    except Exception:
         LOG.exception('Error initializing database')

@@ -1,26 +1,19 @@
-import argparse
-from collections import namedtuple
 from dataclasses import asdict
 import json
-import hashlib
 import os
-import requests
-import sys
 import tempfile
 import zipfile
 
 from keystoneauth1.exceptions.http import Unauthorized
-from keystoneauth1.identity import v3
-from keystoneauth1.session import Session
 from notebook.base.handlers import APIHandler
-from swiftclient import Connection
+import requests
 from tornado import web
 from traitlets import Any, CRegExp, Int, Unicode
 from traitlets.config import LoggingConfigurable
 
 from .db import Artifact, DB
 from .exception import AuthenticationError, BadRequestError, IllegalArchiveError
-from .util import call_jupyterhub_api, refresh_access_token
+from .util import call_jupyterhub_api, ErrorResponder
 
 import logging
 LOG = logging.getLogger(__name__)
@@ -153,13 +146,6 @@ class ArtifactArchiver(LoggingConfigurable):
             res.raise_for_status()
 
         return deposition_id
-
-
-class ErrorResponder:
-     def error_response(self, status=400, message='unknown error'):
-        self.set_status(status)
-        self.write(dict(error=message))
-        return self.finish()
 
 
 class ArtifactHandler(APIHandler, ErrorResponder):
