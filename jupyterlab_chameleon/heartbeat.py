@@ -12,7 +12,6 @@ class HeartbeatHandler(APIHandler, ErrorResponder):
     async def get(self):
         try:
             _, expires_at = refresh_access_token()
-            raise AuthenticationError()
             self.set_status(200)
             self.write({"expires_at": expires_at})
             self.finish()
