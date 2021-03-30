@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import requests
 
@@ -7,15 +8,21 @@ from .exception import AuthenticationError
 ACCESS_TOKEN_ENDPOINT = 'tokens'
 
 
-def call_jupyterhub_api(path: str, method: str='GET') -> dict:
+def call_jupyterhub_api(path: str, query: 'list[tuple[str,str]]'=[], method: str='GET') -> dict:
     hub_api_url = os.getenv('JUPYTERHUB_API_URL')
     hub_token = os.getenv('JUPYTERHUB_API_TOKEN')
 
     if not (hub_api_url and hub_token):
         raise AuthenticationError('Missing JupyterHub authentication info')
 
+    hub_url_parsed = urlsplit(hub_api_url)
+    hub_url_replaced = hub_url_parsed._replace(
+        path=(f'{hub_url_parsed.path}/{path.lstrip("/")}'),
+        query=urlencode(query),
+    )
+    url = urlunsplit(hub_url_replaced)
     res = requests.request(
-        url=f'{hub_api_url}/{path}',
+        url=url,
         method=method,
         headers={'authorization': f'token {hub_token}'})
     res.raise_for_status()
@@ -32,7 +39,7 @@ def jupyterhub_public_url(path: str) -> str:
     return f"{hub_public_url.rstrip('/')}/{path.lstrip('/')}"
 
 
-def refresh_access_token() -> 'tuple[str,int]':
+def refresh_access_token(source_ident=None) -> 'tuple[str,int]':
     """Refresh a user's access token via the JupyterHub API.
 
     This requires a custom handler be installed within JupyterHub; that handler
@@ -44,7 +51,7 @@ def refresh_access_token() -> 'tuple[str,int]':
     Raises:
         AuthenticationError: if the access token cannot be refreshed.
     """
-    res = call_jupyterhub_api(ACCESS_TOKEN_ENDPOINT)
+    res = call_jupyterhub_api(ACCESS_TOKEN_ENDPOINT, query=[('source', source_ident)])
     access_token = res.get('access_token')
 
     if not access_token:

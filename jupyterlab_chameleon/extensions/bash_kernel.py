@@ -10,7 +10,7 @@ def refresh_access_token_task():
     relatively short lifetime.
     """
     def task_fn():
-        access_token, _ = refresh_access_token()
+        access_token, _ = refresh_access_token(source_ident="bash_kernel")
         os.environ['OS_ACCESS_TOKEN'] = access_token
 
     return task_fn, {'interval_s': 120}

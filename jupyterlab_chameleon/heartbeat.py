@@ -12,7 +12,7 @@ class HeartbeatHandler(APIHandler, ErrorResponder):
     @web.authenticated
     async def get(self):
         try:
-            _, expires_at = refresh_access_token()
+            _, expires_at = refresh_access_token(source_ident="heartbeat")
             self.set_status(200)
             self.write({"expires_at": expires_at})
             self.finish()
