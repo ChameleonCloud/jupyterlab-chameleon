@@ -10,8 +10,6 @@ dist/
 # JS build files + deps
 lib/
 node_modules/
-package-lock.json
-yarn.lock
 tsconfig.tsbuildinfo
 
 # Built JLab extension
