@@ -13,5 +13,8 @@ node_modules/
 package-lock.json
 yarn.lock
 
+# Built JLab extension
+labextension/
+
 # Log files
 /*.log

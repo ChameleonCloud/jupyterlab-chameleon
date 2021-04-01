@@ -1,3 +1,7 @@
+.PHONY: setup
+setup:
+	tox --notest
+
 .PHONY: publish-client
 publish-client:
 	npm run-script build
@@ -11,4 +15,4 @@ publish-server:
 
 .PHONY: watch
 watch:
-	npm run-script watch
+	jlpm watch:src
