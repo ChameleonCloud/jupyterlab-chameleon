@@ -1,29 +1,46 @@
+import json
 import os
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from notebook.utils import url_path_join
 
 from .artifact import ArtifactHandler
-from .db import Artifact, DB
+from .db import Artifact
 from .heartbeat import HeartbeatHandler
+from ._version import __version__
 
-import logging
-LOG = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from notebook.notebookapp import NotebookApp
+    from .db import DB
+
+HERE = Path(__file__).parent.resolve()
+
+with (HERE / "labextension" / "package.json").open() as fid:
+    data = json.load(fid)
 
 
-def _jupyter_server_extension_paths():
+def _jupyter_labextension_paths():
     return [{
-        'module': 'jupyterlab_chameleon'
+        "src": "labextension",
+        "dest": data["name"]
     }]
 
 
-def load_jupyter_server_extension(nb_server_app):
+def _jupyter_server_extension_points():
+    return [{
+        "module": "jupyterlab_chameleon"
+    }]
+
+
+def load_jupyter_server_extension(server_app: "NotebookApp"):
     """Called when the extension is loaded.
 
     Args:
-        nb_server_app (NotebookApp): handle to the Notebook webserver instance.
+        server_app (NotebookApp): handle to the Notebook webserver instance.
     """
-    web_app = nb_server_app.web_app
-    notebook_dir = nb_server_app.notebook_dir
+    web_app = server_app.web_app
+    notebook_dir = server_app.notebook_dir
 
     # Prepend the base_url so that it works in a jupyterhub setting
     base_url = web_app.settings['base_url']
@@ -40,10 +57,11 @@ def load_jupyter_server_extension(nb_server_app):
     ]
     web_app.add_handlers('.*$', handlers)
 
-    init_db(db)
+    init_db(server_app, db)
+    server_app.log.info("Registered Chameleon extension at URL path /chameleon")
 
 
-def init_db(db: DB):
+def init_db(server_app: "NotebookApp", db: "DB"):
     try:
         db.build_schema()
         # Also check if there is an initial artifact on the environment.
@@ -60,4 +78,4 @@ def init_db(db: DB):
                 ownership=os.getenv('ARTIFACT_OWNERSHIP'),
             ))
     except Exception:
-        LOG.exception('Error initializing database')
+        server_app.log.exception('Error initializing database')

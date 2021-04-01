@@ -26,7 +26,8 @@
     "lib/*.d.ts",
     "lib/*.js",
     "style/**/*.*",
-    "schema/*.json"
+    "schema/*.json",
+    "style/index.js"
   ],
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -35,11 +36,24 @@
     "lib": "lib/"
   },
   "scripts": {
-    "build": "tsc",
-    "clean": "rimraf lib",
+    "build": "jlpm run build:lib && jlpm run build:labextension:dev",
+    "build:labextension": "jupyter labextension build .",
+    "build:labextension:dev": "jupyter labextension build --development True .",
+    "build:lib": "tsc",
+    "build:prod": "jlpm run build:lib && jlpm run build:labextension",
+    "clean": "jlpm run clean:lib",
+    "clean:all": "jlpm run clean:lib && jlpm run clean:labextension",
+    "clean:labextension": "rimraf jupyterlab-chameleon/labextension",
+    "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
+    "eslint": "eslint . --ext .ts,.tsx --fix",
+    "eslint:check": "eslint . --ext .ts,.tsx",
+    "install:extension": "jupyter labextension develop --overwrite .",
+    "prepare": "jlpm run clean && jlpm run build:prod",
     "prettier": "prettier --write '**/*{.ts,.tsx,.js,.jsx,.css,.json,.md}'",
     "test": "make tests",
-    "watch": "tsc -w"
+    "watch": "run-p watch:src watch:labextension",
+    "watch:labextension": "jupyter labextension watch .",
+    "watch:src": "tsc -w"
   },
   "lint-staged": {
     "**/*{.ts,.tsx,.css,.json,.md}": [
@@ -48,39 +62,42 @@
     ]
   },
   "dependencies": {
-    "@jupyterlab/application": "^2.0.0",
-    "@jupyterlab/apputils": "^2.0.0",
-    "@jupyterlab/cells": "^2.0.0",
-    "@jupyterlab/coreutils": "^4.0.0",
-    "@jupyterlab/docregistry": "^2.0.0",
-    "@jupyterlab/docmanager": "^2.0.0",
-    "@jupyterlab/filebrowser": "^2.0.0",
-    "@jupyterlab/filebrowser-extension": "^2.0.0",
-    "@jupyterlab/fileeditor": "^2.0.0",
-    "@jupyterlab/mainmenu": "^2.0.0",
-    "@jupyterlab/notebook": "^2.0.0",
-    "@jupyterlab/observables": "^3.1.0",
-    "@jupyterlab/services": "^5.0.0",
-    "@jupyterlab/statedb": "^2.0.0",
-    "@jupyterlab/ui-components": "^2.0.0",
-    "@lumino/coreutils": "^1.4.2",
-    "@lumino/disposable": "^1.3.5",
-    "@lumino/signaling": "^1.3.5",
-    "@lumino/widgets": "^1.11.1"
+    "@jupyterlab/application": "^3.0.7",
+    "@jupyterlab/apputils": "^3.0.5",
+    "@jupyterlab/cells": "^3.0.7",
+    "@jupyterlab/coreutils": "^5.0.3",
+    "@jupyterlab/docmanager": "^3.0.7",
+    "@jupyterlab/docregistry": "^3.0.7",
+    "@jupyterlab/filebrowser": "^3.0.7",
+    "@jupyterlab/filebrowser-extension": "^3.0.7",
+    "@jupyterlab/fileeditor": "^3.0.7",
+    "@jupyterlab/mainmenu": "^3.0.5",
+    "@jupyterlab/notebook": "^3.0.7",
+    "@jupyterlab/observables": "^4.0.3",
+    "@jupyterlab/services": "^6.0.5",
+    "@jupyterlab/statedb": "^3.0.3",
+    "@jupyterlab/ui-components": "^3.0.4",
+    "@lumino/coreutils": "^1.5.3",
+    "@lumino/disposable": "^1.4.3",
+    "@lumino/signaling": "^1.4.3",
+    "@lumino/widgets": "^1.16.1"
   },
   "devDependencies": {
+    "@jupyterlab/builder": "^3.0.0",
     "@types/react": "~16.9.16",
     "@types/react-dom": "~16.9.4",
-    "@typescript-eslint/eslint-plugin": "^2.27.0",
-    "@typescript-eslint/parser": "^2.27.0",
-    "eslint": "^6.8.0",
-    "eslint-config-prettier": "^6.7.0",
-    "eslint-plugin-prettier": "^3.1.1",
+    "@typescript-eslint/eslint-plugin": "^4.8.1",
+    "@typescript-eslint/parser": "^4.8.1",
+    "eslint": "^7.14.0",
+    "eslint-config-prettier": "^6.15.0",
+    "eslint-plugin-prettier": "^3.1.4",
     "eslint-plugin-react": "^7.19.0",
     "lint-staged": "^9.5.0",
-    "prettier": "^1.19.1",
-    "rimraf": "^2.6.3",
-    "typescript": "~3.7.2"
+    "mkdirp": "^1.0.3",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^2.1.1",
+    "rimraf": "^3.0.2",
+    "typescript": "~4.1.3"
   },
   "jupyterlab": {
     "extension": true,
@@ -94,6 +111,8 @@
           "name": "jupyterlab_chameleon"
         }
       }
-    }
-  }
+    },
+    "outputDir": "jupyterlab-chameleon/labextension"
+  },
+  "styleModule": "style/index.js"
 }
