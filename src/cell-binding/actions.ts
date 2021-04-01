@@ -17,7 +17,7 @@ export namespace ChameleonActions {
   export function removeCellBinding(
     notebook: Notebook,
     cellMeta: ICellMetadata
-  ) {
+  ): void {
     if (!notebook.model || !notebook.activeCell) {
       return;
     }

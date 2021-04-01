@@ -5,7 +5,7 @@ import { URLExt } from '@jupyterlab/coreutils';
 import { Artifact, IArtifactRegistry } from './tokens';
 
 export class ArtifactRegistry implements IArtifactRegistry {
-  async createArtifact(path: string) {
+  async createArtifact(path: string): Promise<Artifact> {
     const res = await ServerConnection.makeRequest(
       Private.getUrl(this._serverSettings),
       { method: 'POST', body: JSON.stringify({ path }) },
@@ -18,7 +18,7 @@ export class ArtifactRegistry implements IArtifactRegistry {
     return artifact;
   }
 
-  async commitArtifact(artifact: Artifact) {
+  async commitArtifact(artifact: Artifact): Promise<void> {
     const res = await ServerConnection.makeRequest(
       Private.getUrl(this._serverSettings),
       { method: 'PUT', body: JSON.stringify(artifact) },
@@ -38,7 +38,7 @@ export class ArtifactRegistry implements IArtifactRegistry {
     await Private.handleUpdateResponse(res);
   }
 
-  async newArtifactVersion(artifact: Artifact) {
+  async newArtifactVersion(artifact: Artifact): Promise<Artifact> {
     const res = await ServerConnection.makeRequest(
       Private.getUrl(this._serverSettings),
       { method: 'POST', body: JSON.stringify(artifact) },
@@ -51,7 +51,7 @@ export class ArtifactRegistry implements IArtifactRegistry {
     return updatedArtifact;
   }
 
-  async getArtifacts() {
+  async getArtifacts(): Promise<Artifact[]> {
     if (!this._artifactsFetched) {
       if (!this._artifactsFetchPromise) {
         this._artifactsFetchPromise = ServerConnection.makeRequest(
@@ -72,16 +72,16 @@ export class ArtifactRegistry implements IArtifactRegistry {
     return this._artifacts;
   }
 
-  async getArtifact(path: string) {
+  async getArtifact(path: string): Promise<Artifact> {
     const artifacts = await this.getArtifacts();
     return artifacts.find(a => a.path === path);
   }
 
-  getArtifactSync(path: string) {
+  getArtifactSync(path: string): Artifact {
     return this._artifacts.find(a => a.path === path);
   }
 
-  hasArtifactSync(path: string) {
+  hasArtifactSync(path: string): boolean {
     return !!this.getArtifactSync(path);
   }
 
@@ -104,14 +104,14 @@ export class ArtifactRegistry implements IArtifactRegistry {
 }
 
 namespace Private {
-  export function normalizeArtifact(artifact: Artifact) {
+  export function normalizeArtifact(artifact: Artifact): Artifact {
     return {
       ...artifact,
       path: artifact.path.replace(/^\.\//, '')
     };
   }
 
-  export function getUrl(settings: ServerConnection.ISettings) {
+  export function getUrl(settings: ServerConnection.ISettings): string {
     const parts = [settings.baseUrl, 'chameleon', 'artifacts'];
     return URLExt.join.call(URLExt, ...parts);
   }

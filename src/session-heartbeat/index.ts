@@ -1,4 +1,7 @@
-import { JupyterFrontEnd, JupyterFrontEndPlugin } from '@jupyterlab/application';
+import {
+  JupyterFrontEnd,
+  JupyterFrontEndPlugin
+} from '@jupyterlab/application';
 import { Dialog } from '@jupyterlab/apputils';
 import { URLExt } from '@jupyterlab/coreutils';
 import { ServerConnection } from '@jupyterlab/services';
@@ -18,12 +21,12 @@ class Heartbeat {
       Private.getUrl(this._serverSettings),
       { method: 'GET' },
       this._serverSettings
-    )
+    );
 
     const json = await response.json();
 
     if (response.status === 200) {
-      console.debug(`Session ok until ${json.expires_at}`)
+      console.debug(`Session ok until ${json.expires_at}`);
     } else if (response.status === 401) {
       await this._reauthenticate(json.reauthenticate_link);
     }
@@ -49,7 +52,7 @@ class Heartbeat {
 }
 
 namespace Private {
-  export function getUrl(settings: ServerConnection.ISettings) {
+  export function getUrl(settings: ServerConnection.ISettings): string {
     const parts = [settings.baseUrl, 'chameleon', 'heartbeat'];
     return URLExt.join.call(URLExt, ...parts);
   }
@@ -58,13 +61,13 @@ namespace Private {
 const plugin: JupyterFrontEndPlugin<void> = {
   activate(app: JupyterFrontEnd) {
     Promise.all([app.restored])
-    .then(async () => {
-      const heartbeat = new Heartbeat();
-      heartbeat.start();
-    })
-    .catch((err) => {
-      console.error(err);
-    });
+      .then(async () => {
+        const heartbeat = new Heartbeat();
+        heartbeat.start();
+      })
+      .catch(err => {
+        console.error(err);
+      });
   },
   id: '@chameleoncloud/jupyterlab-chameleon:sessionHeartbeatPlugin',
   autoStart: true

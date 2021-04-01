@@ -59,7 +59,7 @@ export class CellBindingSwitcher extends ReactWidget {
     }
   };
 
-  render() {
+  render(): JSX.Element {
     let value = '-';
     if (this._notebook.activeCell) {
       const cellModel = this._notebook.activeCell.model;
@@ -75,9 +75,9 @@ export class CellBindingSwitcher extends ReactWidget {
         onKeyDown={this.handleKeyDown}
         value={value}
         icon={caretDownIcon}
-        aria-label='Binding'
+        aria-label="Binding"
       >
-        <option value='-'>META</option>
+        <option value="-">META</option>
         {this._bindings.map(({ name }) => (
           <option key={name} value={name}>
             {name}

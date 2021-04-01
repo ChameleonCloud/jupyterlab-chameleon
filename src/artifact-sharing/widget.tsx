@@ -132,7 +132,7 @@ class NewArtifactVersionText extends React.Component<ArtifactText.IProps> {
         </p>
         <p>
           All package versions are displayed in Trovi along with your existing
-          artifact title, description, and other metadata. You can optionall
+          artifact title, description, and other metadata. You can optionally
           edit this metadata before saving your new version.
         </p>
       </div>
@@ -193,11 +193,11 @@ export class ArtifactSharingComponent extends React.Component<
     this.onMessage = this.onMessage.bind(this);
   }
 
-  componentDidMount() {
+  componentDidMount(): void {
     window.addEventListener('message', this.onMessage);
   }
 
-  async onMessage(event: MessageEvent) {
+  async onMessage(event: MessageEvent): void {
     if (!this.props.urlFactory.isExternalUrl(event.origin)) {
       return;
     }
@@ -247,7 +247,7 @@ export class ArtifactSharingComponent extends React.Component<
     }
   }
 
-  async onSubmit(event: React.FormEvent) {
+  async onSubmit(event: React.FormEvent): void {
     event.preventDefault();
     this.setState({ currentState: WidgetState.WAITING });
     try {
@@ -278,7 +278,7 @@ export class ArtifactSharingComponent extends React.Component<
     }
   }
 
-  embedUrl() {
+  embedUrl(): string | null {
     const artifact = this.state.artifact;
     if (!artifact) {
       return;
@@ -303,7 +303,7 @@ export class ArtifactSharingComponent extends React.Component<
     return;
   }
 
-  render() {
+  render(): JSX.Element {
     const hidden = { display: 'none' };
     const block = { display: 'block' };
     const visibilities = this._allStates.reduce((memo, state: WidgetState) => {
@@ -408,7 +408,7 @@ export class ArtifactSharingWidget extends ReactWidget {
     this._artifactRegistry = artifactRegistry;
   }
 
-  render() {
+  render(): JSX.Element {
     return (
       <ArtifactSharingComponent
         initialArtifact={this._artifact}

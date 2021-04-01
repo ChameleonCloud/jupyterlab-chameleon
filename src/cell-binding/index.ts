@@ -24,23 +24,23 @@ const BINDING_NAME_METADATA_KEY = `${METADATA_NAMESPACE}.binding_name`;
 const CELL_CLASSES = [...Array(10).keys()].map(n => `chi-binding-${n}`);
 
 export class CellMetadata implements ICellMetadata, IDisposable {
-  hasBinding(cell: ICellModel) {
+  hasBinding(cell: ICellModel): boolean {
     return cell.metadata.has(BINDING_NAME_METADATA_KEY);
   }
 
-  setBindingName(cell: ICellModel, name: string) {
+  setBindingName(cell: ICellModel, name: string): void {
     cell.metadata.set(BINDING_NAME_METADATA_KEY, name);
   }
 
-  removeBinding(cell: ICellModel) {
+  removeBinding(cell: ICellModel): void {
     cell.metadata.delete(BINDING_NAME_METADATA_KEY);
   }
 
-  getBindingName(cell: ICellModel) {
+  getBindingName(cell: ICellModel): string {
     return cell.metadata.get(BINDING_NAME_METADATA_KEY) as string;
   }
 
-  onBindingNameChanged(cell: ICellModel, fn: () => void) {
+  onBindingNameChanged(cell: ICellModel, fn: () => void): void {
     const onChange = (
       metadata: IObservableJSON,
       changed: IObservableMap.IChangedArgs<ReadonlyPartialJSONValue>
@@ -57,7 +57,7 @@ export class CellMetadata implements ICellMetadata, IDisposable {
   }
 
   isDisposed = false;
-  dispose() {
+  dispose(): void {
     this._onBindingNameChangeHandlers.forEach((list, cell) => {
       list.forEach(fn => cell.metadata.changed.disconnect(fn));
     });
@@ -172,7 +172,7 @@ namespace Private {
     widget: Cell,
     cellMeta: ICellMetadata,
     bindings: IBindingModel[]
-  ) {
+  ): void {
     const cellBindingName = cellMeta.getBindingName(widget.model);
     const indexOf = bindings.findIndex(({ name }) => name === cellBindingName);
 
