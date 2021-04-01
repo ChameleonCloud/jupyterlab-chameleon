@@ -7,7 +7,7 @@ import {
   IObservableList,
   IObservableMap
 } from '@jupyterlab/observables';
-import { JSONValue } from '@lumino/coreutils';
+import { ReadonlyPartialJSONValue } from '@lumino/coreutils';
 import { DisposableDelegate, IDisposable } from '@lumino/disposable';
 import { Slot } from '@lumino/signaling';
 import { IBindingModel, ICellMetadata } from './tokens';
@@ -30,7 +30,6 @@ export class CellMetadata implements ICellMetadata, IDisposable {
   }
 
   removeBinding(cell: ICellModel) {
-    console.log('removing it');
     cell.metadata.delete(BINDING_NAME_METADATA_KEY);
   }
 
@@ -41,7 +40,7 @@ export class CellMetadata implements ICellMetadata, IDisposable {
   onBindingNameChanged(cell: ICellModel, fn: () => void) {
     const onChange = (
       metadata: IObservableJSON,
-      changed: IObservableMap.IChangedArgs<JSONValue>
+      changed: IObservableMap.IChangedArgs<ReadonlyPartialJSONValue>
     ) => {
       console.log(metadata, changed);
       if (changed.key === BINDING_NAME_METADATA_KEY) {
@@ -54,7 +53,7 @@ export class CellMetadata implements ICellMetadata, IDisposable {
     this._onBindingNameChangeHandlers.set(cell, handlers.concat([onChange]));
   }
 
-  isDisposed: boolean = false;
+  isDisposed = false;
   dispose() {
     this._onBindingNameChangeHandlers.forEach((list, cell) => {
       list.forEach(fn => cell.metadata.changed.disconnect(fn));
@@ -64,7 +63,7 @@ export class CellMetadata implements ICellMetadata, IDisposable {
 
   private _onBindingNameChangeHandlers: Map<
     ICellModel,
-    Slot<IObservableJSON, IObservableMap.IChangedArgs<JSONValue>>[]
+    Slot<IObservableJSON, IObservableMap.IChangedArgs<ReadonlyPartialJSONValue>>[]
   > = new Map();
 }
 
