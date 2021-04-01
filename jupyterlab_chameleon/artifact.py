@@ -5,7 +5,7 @@ import tempfile
 import zipfile
 
 from keystoneauth1.exceptions.http import Unauthorized
-from notebook.base.handlers import APIHandler
+from jupyter_server.base.handlers import APIHandler
 import requests
 from tornado import web
 from traitlets import Any, CRegExp, Int, Unicode

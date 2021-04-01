@@ -3,16 +3,15 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from notebook.utils import url_path_join
+from jupyter_server.utils import url_path_join
 
 from .artifact import ArtifactHandler
-from .db import Artifact
+from .db import Artifact, DB
 from .heartbeat import HeartbeatHandler
 from ._version import __version__
 
 if TYPE_CHECKING:
     from notebook.notebookapp import NotebookApp
-    from .db import DB
 
 HERE = Path(__file__).parent.resolve()
 

@@ -1,5 +1,5 @@
 from keystoneauth1.exceptions import Unauthorized
-from notebook.base.handlers import APIHandler
+from jupyter_server.base.handlers import APIHandler
 from tornado import web
 
 from .exception import AuthenticationError

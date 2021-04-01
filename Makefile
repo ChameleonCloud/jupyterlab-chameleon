@@ -1,16 +1,13 @@
 .PHONY: setup
 setup:
+	@echo "NOTE: this will take a while because we have to build the client "
+	@echo "component of the extension. Expect this to take ~5 minutes."
 	tox --notest
 
-.PHONY: publish-client
-publish-client:
-	npm run-script build
-	npm publish
-
-.PHONY: publish-server
-publish-server:
+.PHONY: publish
+publish:
 	@ rm -rf build/ dist/
-	python setup.py sdist bdist_wheel
+	python -m build
 	twine upload dist/*
 
 .PHONY: watch
