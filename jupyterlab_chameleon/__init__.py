@@ -39,7 +39,7 @@ def _load_jupyter_server_extension(server_app: "NotebookApp"):
         server_app (NotebookApp): handle to the Notebook webserver instance.
     """
     web_app = server_app.web_app
-    notebook_dir = server_app.notebook_dir
+    notebook_dir = server_app.notebook_dir or "."
 
     # Prepend the base_url so that it works in a jupyterhub setting
     base_url = web_app.settings['base_url']

@@ -65,21 +65,22 @@
     ]
   },
   "dependencies": {
-    "@jupyterlab/application": "^3.0.7",
-    "@jupyterlab/apputils": "^3.0.5",
-    "@jupyterlab/cells": "^3.0.7",
-    "@jupyterlab/coreutils": "^5.0.3",
-    "@jupyterlab/docmanager": "^3.0.7",
-    "@jupyterlab/docregistry": "^3.0.7",
-    "@jupyterlab/filebrowser": "^3.0.7",
-    "@jupyterlab/filebrowser-extension": "^3.0.7",
-    "@jupyterlab/fileeditor": "^3.0.7",
-    "@jupyterlab/mainmenu": "^3.0.5",
-    "@jupyterlab/notebook": "^3.0.7",
-    "@jupyterlab/observables": "^4.0.3",
-    "@jupyterlab/services": "^6.0.5",
-    "@jupyterlab/statedb": "^3.0.3",
-    "@jupyterlab/ui-components": "^3.0.4",
+    "@jupyterlab/application": "^3.0.0",
+    "@jupyterlab/apputils": "^3.0.0",
+    "@jupyterlab/cells": "^3.0.0",
+    "@jupyterlab/coreutils": "^5.0.0",
+    "@jupyterlab/docmanager": "^3.0.0",
+    "@jupyterlab/docregistry": "^3.0.0",
+    "@jupyterlab/filebrowser": "^3.0.0",
+    "@jupyterlab/filebrowser-extension": "^3.0.0",
+    "@jupyterlab/fileeditor": "^3.0.0",
+    "@jupyterlab/mainmenu": "^3.0.0",
+    "@jupyterlab/notebook": "^3.0.0",
+    "@jupyterlab/observables": "^4.0.0",
+    "@jupyterlab/services": "^6.0.0",
+    "@jupyterlab/statedb": "^3.0.0",
+    "@jupyterlab/translation": "^3.0.0",
+    "@jupyterlab/ui-components": "^3.0.0",
     "@lumino/coreutils": "^1.5.3",
     "@lumino/disposable": "^1.4.3",
     "@lumino/signaling": "^1.4.3",
@@ -119,6 +120,12 @@
       }
     },
     "outputDir": "jupyterlab_chameleon/labextension"
+  },
+  "sharedPackages": {
+    "react": {
+      "bundled": false,
+      "singleton": true
+    }
   },
   "styleModule": "style/index.js"
 }

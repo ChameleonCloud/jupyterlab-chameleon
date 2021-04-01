@@ -7,7 +7,8 @@ import sessionHeartbeatPlugin from './session-heartbeat';
 /**
  * Export the plugins as default.
  */
-const plugins: JupyterFrontEndPlugin<any>[] = artifactSharingPlugins;
+const plugins: JupyterFrontEndPlugin<any>[] = [];
+artifactSharingPlugins.forEach(plugin => plugins.push(plugin));
 plugins.push(sessionHeartbeatPlugin);
 // cellBindingPlugin
 

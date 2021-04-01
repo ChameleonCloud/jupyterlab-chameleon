@@ -20,6 +20,7 @@ import { IMainMenu } from '@jupyterlab/mainmenu';
 import { Contents } from '@jupyterlab/services';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
+import { ITranslator } from '@jupyterlab/translation';
 import { toArray } from '@lumino/algorithm';
 import { Menu } from '@lumino/widgets';
 import { DirListingRenderer } from './filebrowser';
@@ -332,11 +333,12 @@ class FileBrowserHelper {
 const fileBrowserFactoryPlugin: JupyterFrontEndPlugin<IFileBrowserFactory> = {
   id: FILE_BROWSER_PLUGIN_ID,
   provides: IFileBrowserFactory,
-  requires: [IDocumentManager, IArtifactRegistry],
+  requires: [IDocumentManager, ITranslator, IArtifactRegistry],
   optional: [IStateDB, IRouter, JupyterFrontEnd.ITreeResolver],
   async activate(
     app: JupyterFrontEnd,
     docManager: IDocumentManager,
+    translator: ITranslator,
     artifactRegistry: IArtifactRegistry,
     state: IStateDB | null,
     router: IRouter | null,
@@ -362,7 +364,14 @@ const fileBrowserFactoryPlugin: JupyterFrontEndPlugin<IFileBrowserFactory> = {
         return id === '@jupyterlab/filebrowser-extension:factory';
       }
     );
-    return factoryPlugin.activate(app, docManager, state, router, tree);
+    return factoryPlugin.activate(
+      app,
+      docManager,
+      translator,
+      state,
+      router,
+      tree
+    );
   }
 };
 
