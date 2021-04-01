@@ -1,6 +1,11 @@
 import { ReactWidget } from '@jupyterlab/apputils';
 import * as React from 'react';
-import { IArtifactSharingURL, IArtifactRegistry, Artifact, Workflow } from './tokens';
+import {
+  IArtifactSharingURL,
+  IArtifactRegistry,
+  Artifact,
+  Workflow
+} from './tokens';
 
 enum WidgetState {
   CONFIRM_FORM = 'confirm-form',
@@ -47,18 +52,37 @@ class NewArtifactText extends React.Component<ArtifactText.IProps> {
         <h2>Package new artifact</h2>
         <p>
           Packaging your work as an <i>artifact</i> makes it easier to share
-          your Notebook(s) and related files with others. A packaged
-          experiment:
+          your Notebook(s) and related files with others. A packaged experiment:
         </p>
         <ul>
           <li>can by &ldquo;replayed&rdquo; by any Chameleon user</li>
-          <li>is displayed in <a href={this.props.urlFactory.indexUrl()} rel='noreferrer' target='_blank'>Chameleon Trovi</a> (artifact sharing system)</li>
-          <li>is initially private to you, but can be shared, either with specific projects, or all users</li>
+          <li>
+            is displayed in{' '}
+            <a
+              href={this.props.urlFactory.indexUrl()}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Chameleon Trovi
+            </a>{' '}
+            (artifact sharing system)
+          </li>
+          <li>
+            is initially private to you, but can be shared, either with specific
+            projects, or all users
+          </li>
           <li>supports versioning, if you ever want to make changes</li>
         </ul>
         <p>
-          To learn more about Trovi, and artifact packaging, please refer
-          to the <a href='https://chameleoncloud.readthedocs.io' rel='noreferrer' target='_blank'>Chameleon documentation</a>.
+          To learn more about Trovi, and artifact packaging, please refer to the{' '}
+          <a
+            href="https://chameleoncloud.readthedocs.io"
+            rel="noreferrer"
+            target="_blank"
+          >
+            Chameleon documentation
+          </a>
+          .
         </p>
       </div>
     );
@@ -70,14 +94,20 @@ class NewArtifactSuccessText extends React.Component<ArtifactText.IProps> {
     return (
       <div>
         <h2>Your artifact was successfully packaged.</h2>
-        { this.props.artifact && <p>
-          You can view your artifact at any time on <a href={this.props.urlFactory.detailUrl(this.props.artifact.id)} target='_blank' rel='noreferrer'>
-            Trovi
-          </a>.
-        </p> }
-        <p>
-          You may now close this window.
-        </p>
+        {this.props.artifact && (
+          <p>
+            You can view your artifact at any time on{' '}
+            <a
+              href={this.props.urlFactory.detailUrl(this.props.artifact.id)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Trovi
+            </a>
+            .
+          </p>
+        )}
+        <p>You may now close this window.</p>
       </div>
     );
   }
@@ -101,9 +131,9 @@ class NewArtifactVersionText extends React.Component<ArtifactText.IProps> {
           outside of any already-published package directories.
         </p>
         <p>
-          All package versions are displayed in Trovi along with your
-          existing artifact title, description, and other metadata. You can
-          optionall edit this metadata before saving your new version.
+          All package versions are displayed in Trovi along with your existing
+          artifact title, description, and other metadata. You can optionall
+          edit this metadata before saving your new version.
         </p>
       </div>
     );
@@ -115,14 +145,20 @@ class NewArtifactVersionSuccessText extends React.Component<ArtifactText.IProps>
     return (
       <div>
         <h2>A new version of your artifact was created.</h2>
-        { this.props.artifact && <p>
-          You can view your artifact at any time on <a href={this.props.urlFactory.detailUrl(this.props.artifact.id)} target='_blank' rel='noreferrer'>
-            Trovi
-          </a>.
-        </p> }
-        <p>
-          You may now close this window.
-        </p>
+        {this.props.artifact && (
+          <p>
+            You can view your artifact at any time on{' '}
+            <a
+              href={this.props.urlFactory.detailUrl(this.props.artifact.id)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Trovi
+            </a>
+            .
+          </p>
+        )}
+        <p>You may now close this window.</p>
       </div>
     );
   }
@@ -130,8 +166,8 @@ class NewArtifactVersionSuccessText extends React.Component<ArtifactText.IProps>
 
 export class ArtifactSharingComponent extends React.Component<
   ArtifactSharingComponent.IProps,
-  ArtifactSharingComponent.IState> {
-
+  ArtifactSharingComponent.IState
+> {
   constructor(props: ArtifactSharingComponent.IProps) {
     super(props);
 
@@ -162,7 +198,7 @@ export class ArtifactSharingComponent extends React.Component<
   }
 
   async onMessage(event: MessageEvent) {
-    if (! this.props.urlFactory.isExternalUrl(event.origin)) {
+    if (!this.props.urlFactory.isExternalUrl(event.origin)) {
       return;
     }
 
@@ -173,7 +209,7 @@ export class ArtifactSharingComponent extends React.Component<
       return;
     }
 
-    if (! payload.body) {
+    if (!payload.body) {
       throw new Error('Invalid post message payload');
     }
 
@@ -186,8 +222,8 @@ export class ArtifactSharingComponent extends React.Component<
         // There are two cases we care about: a user is creating their own
         // artifact from an existing fork, or they are creating a new one
         // altogether.
-        const isNewOwnedArtifact = (! this.state.artifact.id)
-          || this.state.artifact.ownership !== 'own';
+        const isNewOwnedArtifact =
+          !this.state.artifact.id || this.state.artifact.ownership !== 'own';
 
         if (isNewOwnedArtifact) {
           // Update/save the issued ID back to the local artifact DB.
@@ -218,13 +254,15 @@ export class ArtifactSharingComponent extends React.Component<
       let artifact: Artifact;
       if (this.state.artifact.id) {
         artifact = await this.props.artifactRegistry.newArtifactVersion(
-          this.state.artifact);
+          this.state.artifact
+        );
       } else {
         artifact = await this.props.artifactRegistry.createArtifact(
-          this.state.artifact.path);
+          this.state.artifact.path
+        );
       }
 
-      if (! artifact.deposition_id) {
+      if (!artifact.deposition_id) {
         throw new Error('Missing artifact ID');
       }
 
@@ -232,7 +270,7 @@ export class ArtifactSharingComponent extends React.Component<
         currentState: WidgetState.EMBED_FORM,
         artifact
       });
-    } catch(e) {
+    } catch (e) {
       this.setState({
         currentState: WidgetState.CONFIRM_FORM,
         errorMessage: `Failed to package artifact: ${e.message}`
@@ -242,7 +280,7 @@ export class ArtifactSharingComponent extends React.Component<
 
   embedUrl() {
     const artifact = this.state.artifact;
-    if (! artifact) {
+    if (!artifact) {
       return;
     }
 
@@ -251,8 +289,10 @@ export class ArtifactSharingComponent extends React.Component<
     if (id) {
       if (deposition_id) {
         return this.props.urlFactory.newVersionUrl(
-          id, deposition_id,
-          deposition_repo);
+          id,
+          deposition_id,
+          deposition_repo
+        );
       } else {
         return this.props.urlFactory.updateUrl(id);
       }
@@ -266,13 +306,10 @@ export class ArtifactSharingComponent extends React.Component<
   render() {
     const hidden = { display: 'none' };
     const block = { display: 'block' };
-    const visibilities = this._allStates.reduce(
-      (memo, state: WidgetState) => {
-        memo[state] = this.state.currentState === state ? block : hidden;
-        return memo;
-      },
-      {} as { [key in WidgetState]: { display: string } }
-    );
+    const visibilities = this._allStates.reduce((memo, state: WidgetState) => {
+      memo[state] = this.state.currentState === state ? block : hidden;
+      return memo;
+    }, {} as { [key in WidgetState]: { display: string } });
 
     let formText: React.ElementRef<any>;
     let successText: React.ElementRef<any>;
@@ -280,49 +317,73 @@ export class ArtifactSharingComponent extends React.Component<
     // Check if we started from an already-published artifact.
     if (this.props.initialArtifact.id) {
       formText = <NewArtifactVersionText urlFactory={this.props.urlFactory} />;
-      successText = <NewArtifactVersionSuccessText urlFactory={this.props.urlFactory} artifact={this.state.artifact} />;
+      successText = (
+        <NewArtifactVersionSuccessText
+          urlFactory={this.props.urlFactory}
+          artifact={this.state.artifact}
+        />
+      );
     } else {
       formText = <NewArtifactText urlFactory={this.props.urlFactory} />;
-      successText = <NewArtifactSuccessText urlFactory={this.props.urlFactory} artifact={this.state.artifact} />;
+      successText = (
+        <NewArtifactSuccessText
+          urlFactory={this.props.urlFactory}
+          artifact={this.state.artifact}
+        />
+      );
     }
 
     return (
-      <div className='chi-Expand'>
-        <div className='chi-ArtifactSharing-Form' style={visibilities[WidgetState.CONFIRM_FORM]}>
+      <div className="chi-Expand">
+        <div
+          className="chi-ArtifactSharing-Form"
+          style={visibilities[WidgetState.CONFIRM_FORM]}
+        >
           <form onSubmit={this.onSubmit}>
-            {this.state.errorMessage &&
-              <div className='chi-ArtifactSharing-ErrorMessage'>
+            {this.state.errorMessage && (
+              <div className="chi-ArtifactSharing-ErrorMessage">
                 {this.state.errorMessage}
               </div>
-            }
+            )}
             {formText}
-            <div className='chi-ArtifactSharing-FormActions'>
-              <button className='jp-mod-styled jp-mod-accept' type='submit'>
+            <div className="chi-ArtifactSharing-FormActions">
+              <button className="jp-mod-styled jp-mod-accept" type="submit">
                 Upload: <code>{this.state.artifact.path}/</code>
               </button>
             </div>
           </form>
         </div>
-        <div className='chi-Expand' style={visibilities[WidgetState.EMBED_FORM]}>
-          {this.state.currentState === WidgetState.EMBED_FORM &&
-            <iframe className='chi-ArtifactSharing-embed'
-              src={this.embedUrl()} />
-          }
+        <div
+          className="chi-Expand"
+          style={visibilities[WidgetState.EMBED_FORM]}
+        >
+          {this.state.currentState === WidgetState.EMBED_FORM && (
+            <iframe
+              className="chi-ArtifactSharing-embed"
+              src={this.embedUrl()}
+            />
+          )}
         </div>
-        <div className='chi-ArtifactSharing-Form' style={visibilities[WidgetState.WAITING]}>
-          <div className='jp-Spinner'>
-            <div className='jp-SpinnerContent'></div>
-            <div className='chi-ArtifactSharing-LoadingMessage'>
+        <div
+          className="chi-ArtifactSharing-Form"
+          style={visibilities[WidgetState.WAITING]}
+        >
+          <div className="jp-Spinner">
+            <div className="jp-SpinnerContent"></div>
+            <div className="chi-ArtifactSharing-LoadingMessage">
               Please wait while your files are uploaded&hellip;
             </div>
           </div>
         </div>
-        <div className='chi-ArtifactSharing-Form' style={visibilities[WidgetState.SUCCESS]}>
-          {this.state.errorMessage &&
-            <div className='chi-ArtifactSharing-ErrorMessage'>
+        <div
+          className="chi-ArtifactSharing-Form"
+          style={visibilities[WidgetState.SUCCESS]}
+        >
+          {this.state.errorMessage && (
+            <div className="chi-ArtifactSharing-ErrorMessage">
               {this.state.errorMessage}
             </div>
-          }
+          )}
           {successText}
         </div>
       </div>
@@ -348,14 +409,17 @@ export class ArtifactSharingWidget extends ReactWidget {
   }
 
   render() {
-    return <ArtifactSharingComponent
-      initialArtifact={this._artifact}
-      workflow={this._workflow}
-      urlFactory={this._urlFactory}
-      artifactRegistry={this._artifactRegistry}
-      // Disposing of a widget added to a MainContentArea will cause the
-      // content area to also dispose of itself (close itself.)
-      onCancel={this.dispose.bind(this)}/>
+    return (
+      <ArtifactSharingComponent
+        initialArtifact={this._artifact}
+        workflow={this._workflow}
+        urlFactory={this._urlFactory}
+        artifactRegistry={this._artifactRegistry}
+        // Disposing of a widget added to a MainContentArea will cause the
+        // content area to also dispose of itself (close itself.)
+        onCancel={this.dispose.bind(this)}
+      />
+    );
   }
 
   private _artifact: Artifact;

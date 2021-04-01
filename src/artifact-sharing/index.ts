@@ -353,7 +353,7 @@ const fileBrowserFactoryPlugin: JupyterFrontEndPlugin<IFileBrowserFactory> = {
     // This factory plugin exists just so that we can defer the loading of the
     // file browser until after we shim the `defaultRenderer`.
     //
-    // eslint-disable-next-line @typescript-eslint/ban-ts-ignore
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore: ignore our hacky overriding of a readonly property.
     DirListing.defaultRenderer = new DirListingRenderer(artifactRegistry);
     // Find the existing FileBrowser factory plugin
