@@ -1,4 +1,7 @@
-import { JupyterFrontEnd, JupyterFrontEndPlugin } from '@jupyterlab/application';
+import {
+  JupyterFrontEnd,
+  JupyterFrontEndPlugin
+} from '@jupyterlab/application';
 import { Cell, ICellModel } from '@jupyterlab/cells';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 import { INotebookModel, NotebookPanel } from '@jupyterlab/notebook';
@@ -63,7 +66,10 @@ export class CellMetadata implements ICellMetadata, IDisposable {
 
   private _onBindingNameChangeHandlers: Map<
     ICellModel,
-    Slot<IObservableJSON, IObservableMap.IChangedArgs<ReadonlyPartialJSONValue>>[]
+    Slot<
+      IObservableJSON,
+      IObservableMap.IChangedArgs<ReadonlyPartialJSONValue>
+    >[]
   > = new Map();
 }
 

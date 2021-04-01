@@ -6,7 +6,6 @@ import { Contents } from '@jupyterlab/services';
 
 import { IArtifactRegistry } from './tokens';
 
-
 export class DirListingRenderer extends DirListing.Renderer {
   constructor(artifactRegistry: IArtifactRegistry) {
     super();
@@ -15,7 +14,7 @@ export class DirListingRenderer extends DirListing.Renderer {
 
   populateHeaderNode(node: HTMLElement): void {
     super.populateHeaderNode(node);
-    if (! this._headerIndicator) {
+    if (!this._headerIndicator) {
       this._headerIndicator = document.createElement('div');
       this._headerIndicator.className = 'chi-Something';
     }

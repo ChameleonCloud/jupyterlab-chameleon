@@ -1,6 +1,7 @@
 import {
   ILayoutRestorer,
-  IRouter, JupyterFrontEnd,
+  IRouter,
+  JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 import {
@@ -9,7 +10,11 @@ import {
   WidgetTracker
 } from '@jupyterlab/apputils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
-import { DirListing, FileBrowser, IFileBrowserFactory } from '@jupyterlab/filebrowser';
+import {
+  DirListing,
+  FileBrowser,
+  IFileBrowserFactory
+} from '@jupyterlab/filebrowser';
 import fileBrowserPlugins from '@jupyterlab/filebrowser-extension';
 import { IMainMenu } from '@jupyterlab/mainmenu';
 import { Contents } from '@jupyterlab/services';
@@ -36,8 +41,10 @@ export class ArtifactSharingURL implements IArtifactSharingURL {
     return this._baseUrl;
   }
   detailUrl(externalId: string): string {
-    return this._makeUrl('externalDetailEndpoint')
-      .replace('{externalId}', externalId);
+    return this._makeUrl('externalDetailEndpoint').replace(
+      '{externalId}',
+      externalId
+    );
   }
   createUrl(depositionId: string, depositionRepo: string): string {
     return this._makeUrl('externalCreateEndpoint')
@@ -45,10 +52,16 @@ export class ArtifactSharingURL implements IArtifactSharingURL {
       .replace('{depositionRepo}', depositionRepo);
   }
   updateUrl(externalId: string): string {
-    return this._makeUrl('externalUpdateEndpoint')
-      .replace('{externalId}', externalId);
+    return this._makeUrl('externalUpdateEndpoint').replace(
+      '{externalId}',
+      externalId
+    );
   }
-  newVersionUrl(externalId: string, depositionId: string, depositionRepo: string): string {
+  newVersionUrl(
+    externalId: string,
+    depositionId: string,
+    depositionRepo: string
+  ): string {
     return this._makeUrl('externalNewVersionEndpoint')
       .replace('{externalId}', externalId)
       .replace('{depositionId}', depositionId)
@@ -83,9 +96,14 @@ function createOpener(
 
     if (!widget || widget.isDisposed) {
       const urlFactory = new ArtifactSharingURL(settings);
-      const content = new ArtifactSharingWidget(artifact, workflow, urlFactory, artifactRegistry);
-      content.title.label = workflow === 'upload'
-        ? 'Package artifact' : 'Edit artifact';
+      const content = new ArtifactSharingWidget(
+        artifact,
+        workflow,
+        urlFactory,
+        artifactRegistry
+      );
+      content.title.label =
+        workflow === 'upload' ? 'Package artifact' : 'Edit artifact';
       widget = new MainAreaWidget({ content });
       widget.id = 'artifact-sharing';
     }
@@ -126,63 +144,76 @@ const plugin: JupyterFrontEndPlugin<void> = {
       settingRegistry.load(WIDGET_PLUGIN_ID),
       app.restored,
       artifactRegistry.getArtifacts()
-    ]).then(async ([settings]) => {
-      const browser = fileBrowserFactory.defaultBrowser;
-      const tracker = new WidgetTracker<MainAreaWidget<ArtifactSharingWidget>>({
-        namespace: 'artifact-sharing'
+    ])
+      .then(async ([settings]) => {
+        const browser = fileBrowserFactory.defaultBrowser;
+        const tracker = new WidgetTracker<
+          MainAreaWidget<ArtifactSharingWidget>
+        >({
+          namespace: 'artifact-sharing'
+        });
+
+        const browserHelper = new FileBrowserHelper(browser, artifactRegistry);
+        const openWidget = createOpener(
+          app,
+          settings,
+          tracker,
+          artifactRegistry,
+          browserHelper
+        );
+
+        const enableEdit = () => {
+          const item = browserHelper.currentItem();
+          return (
+            browserHelper.canBeArtifact(item) &&
+            browserHelper.isOwnedArtifact(item)
+          );
+        };
+
+        const enableCreate = () => {
+          const item = browserHelper.currentItem();
+          return (
+            browserHelper.canBeArtifact(item) &&
+            !browserHelper.isOwnedArtifact(item)
+          );
+        };
+
+        app.commands.addCommand(CommandIDs.create, {
+          label: 'Package as new artifact',
+          isEnabled: enableCreate,
+          async execute() {
+            await openWidget('upload');
+          }
+        });
+
+        app.commands.addCommand(CommandIDs.newVersion, {
+          label: 'Create new artifact version',
+          isEnabled: enableEdit,
+          async execute() {
+            await openWidget('upload');
+          }
+        });
+
+        app.commands.addCommand(CommandIDs.edit, {
+          label: 'Edit artifact',
+          isEnabled: enableEdit,
+          async execute() {
+            await openWidget('edit');
+          }
+        });
+
+        registerTopMenu(app, mainMenu);
+        registerContextMenu(app);
+        registerCommandPalette(palette);
+
+        await restorer.restore(tracker, {
+          command: CommandIDs.create,
+          name: () => 'artifact-sharing'
+        });
+      })
+      .catch((reason: Error) => {
+        console.error(reason.message);
       });
-
-      const browserHelper = new FileBrowserHelper(browser, artifactRegistry);
-      const openWidget = createOpener(app, settings, tracker, artifactRegistry, browserHelper);
-
-      const enableEdit = () => {
-        const item = browserHelper.currentItem();
-        return (browserHelper.canBeArtifact(item)
-          && browserHelper.isOwnedArtifact(item));
-      };
-
-      const enableCreate = () => {
-        const item = browserHelper.currentItem();
-        return (browserHelper.canBeArtifact(item)
-          && ! browserHelper.isOwnedArtifact(item));
-      };
-
-      app.commands.addCommand(CommandIDs.create, {
-        label: 'Package as new artifact',
-        isEnabled: enableCreate,
-        async execute() {
-          await openWidget('upload');
-        }
-      });
-
-      app.commands.addCommand(CommandIDs.newVersion, {
-        label: 'Create new artifact version',
-        isEnabled: enableEdit,
-        async execute() {
-          await openWidget('upload');
-        }
-      });
-
-      app.commands.addCommand(CommandIDs.edit, {
-        label: 'Edit artifact',
-        isEnabled: enableEdit,
-        async execute() {
-          await openWidget('edit');
-        }
-      });
-
-      registerTopMenu(app, mainMenu);
-      registerContextMenu(app);
-      registerCommandPalette(palette);
-
-      await restorer.restore(tracker, {
-        command: CommandIDs.create,
-        name: () => 'artifact-sharing'
-      });
-    })
-    .catch((reason: Error) => {
-      console.error(reason.message);
-    });
   },
   autoStart: true
 };
@@ -249,11 +280,11 @@ class FileBrowserHelper {
 
   async currentItemArtifact() {
     const item = this.currentItem();
-    if (! item || item.type !== 'directory') {
+    if (!item || item.type !== 'directory') {
       return null;
     }
     let artifact = await this._artifactRegistry.getArtifact(item.path);
-    if (! artifact) {
+    if (!artifact) {
       // Generate a new placeholder artifact for the given path.
       artifact = { path: item.path };
     }
@@ -326,10 +357,11 @@ const fileBrowserFactoryPlugin: JupyterFrontEndPlugin<IFileBrowserFactory> = {
     // @ts-ignore: ignore our hacky overriding of a readonly property.
     DirListing.defaultRenderer = new DirListingRenderer(artifactRegistry);
     // Find the existing FileBrowser factory plugin
-    const factoryPlugin: JupyterFrontEndPlugin<IFileBrowserFactory> =
-    fileBrowserPlugins.find(({ id }) => {
-      return id === '@jupyterlab/filebrowser-extension:factory';
-    });
+    const factoryPlugin: JupyterFrontEndPlugin<IFileBrowserFactory> = fileBrowserPlugins.find(
+      ({ id }) => {
+        return id === '@jupyterlab/filebrowser-extension:factory';
+      }
+    );
     return factoryPlugin.activate(app, docManager, state, router, tree);
   }
 };

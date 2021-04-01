@@ -90,7 +90,9 @@ export class ArtifactRegistry implements IArtifactRegistry {
   private _artifactsFetched = false;
   private _artifactsFetchPromise: Promise<Artifact[]>;
   private _updateArtifacts(artifact: Artifact): void {
-    const indexOf = this._artifacts.findIndex(({ path }) => path === artifact.path);
+    const indexOf = this._artifacts.findIndex(
+      ({ path }) => path === artifact.path
+    );
     if (indexOf >= 0) {
       this._artifacts = this._artifacts
         .slice(0, indexOf)
@@ -114,9 +116,7 @@ namespace Private {
     return URLExt.join.call(URLExt, ...parts);
   }
 
-  export async function handleListResponse(
-    res: Response
-  ): Promise<Artifact[]> {
+  export async function handleListResponse(res: Response): Promise<Artifact[]> {
     const { artifacts } = await res.json();
     if (!artifacts || !Array.isArray(artifacts)) {
       throw new Error('Malformed response');
@@ -124,24 +124,20 @@ namespace Private {
     return artifacts.map(normalizeArtifact) as Artifact[];
   }
 
-  export async function handleUpdateResponse(
-    res: Response
-  ): Promise<void> {
+  export async function handleUpdateResponse(res: Response): Promise<void> {
     if (res.status > 299) {
       const message = `HTTP error ${res.status} occurred updating the artifact`;
       throw new ServerConnection.ResponseError(res, message);
     }
   }
 
-  export async function handleCreateResponse(
-    res: Response
-  ): Promise<Artifact> {
+  export async function handleCreateResponse(res: Response): Promise<Artifact> {
     if (res.status > 299) {
       const message = 'An error occurred creating the artifact';
       throw new ServerConnection.ResponseError(res, message);
     }
 
-    const artifact = await res.json() as Artifact;
+    const artifact = (await res.json()) as Artifact;
 
     return normalizeArtifact(artifact);
   }

@@ -1,11 +1,15 @@
-import { Token } from "@lumino/coreutils";
+import { Token } from '@lumino/coreutils';
 
 export interface IArtifactSharingURL {
   indexUrl(): string;
   detailUrl(externalId: string): string;
   createUrl(depositionId: string, depositionRepo: string): string;
   updateUrl(externalId: string): string;
-  newVersionUrl(externalId: string, depositionId: string, depositionRepo: string): string;
+  newVersionUrl(
+    externalId: string,
+    depositionId: string,
+    depositionRepo: string
+  ): string;
   isExternalUrl(origin: string): boolean;
 }
 
@@ -13,7 +17,7 @@ export interface IArtifactSharingURL {
 export class Artifact {
   readonly path: string;
   readonly id?: string;
-  readonly deposition_id?: string;  // This can be present during create/update.
+  readonly deposition_id?: string; // This can be present during create/update.
   readonly deposition_repo?: string;
   readonly ownership?: 'own' | 'fork';
 }
@@ -22,7 +26,7 @@ export type Workflow = 'upload' | 'edit';
 
 export const IArtifactRegistry = new Token<IArtifactRegistry>(
   '@jupyterlab_zenodo:IZenodoRegistry'
-)
+);
 
 export interface IArtifactRegistry {
   createArtifact(path: string): Promise<Artifact>;
