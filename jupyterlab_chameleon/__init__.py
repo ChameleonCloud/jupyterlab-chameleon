@@ -16,13 +16,13 @@ if TYPE_CHECKING:
 
 HERE = Path(__file__).parent.resolve()
 
-with (HERE.parent / "package.json").open() as fid:
+with (HERE / "labextension" / "package.json").open() as fid:
     data = json.load(fid)
 
 
 def _jupyter_labextension_paths():
     return [{
-        "src": "src",
+        "src": "labextension",
         "dest": data["name"]
     }]
 
@@ -33,7 +33,7 @@ def _jupyter_server_extension_points():
     }]
 
 
-def load_jupyter_server_extension(server_app: "NotebookApp"):
+def _load_jupyter_server_extension(server_app: "NotebookApp"):
     """Called when the extension is loaded.
 
     Args:
@@ -59,6 +59,10 @@ def load_jupyter_server_extension(server_app: "NotebookApp"):
 
     init_db(server_app, db)
     server_app.log.info("Registered Chameleon extension at URL path /chameleon")
+
+
+# For backward compatibility
+load_jupyter_server_extension = _load_jupyter_server_extension
 
 
 def init_db(server_app: "NotebookApp", db: "DB"):

@@ -1,62 +1,109 @@
 """
-Setup module for the jupyterlab_zenodo extension
+jupyterlab_chameleon setup
 """
+import json
+from pathlib import Path
 
-import pathlib
-from setuptools import setup, find_packages
+from jupyter_packaging import (
+    create_cmdclass,
+    install_npm,
+    ensure_targets,
+    combine_commands,
+    skip_if_exists
+)
+import setuptools
 
-# The directory containing this file
-HERE = pathlib.Path(__file__).parent
+HERE = Path(__file__).parent.resolve()
 
-# The text of the README file
-README = (HERE / "README.md").read_text()
+# The name of the project
+name = "jupyterlab_chameleon"
+# The name of the Python package
+package_name = "jupyterlab_chameleon"
+
+lab_path = (HERE / package_name / "labextension")
+
+# Representative files that should exist after a successful build
+jstargets = [
+    str(lab_path / "package.json"),
+]
+
+package_data_spec = {
+    package_name: ["*"],
+}
+
+long_description = (HERE / "README.md").read_text()
+
+# Get the package info from package.json
+pkg_json = json.loads((HERE / "package.json").read_bytes())
+
+labext_name = pkg_json["name"]
+
+data_files_spec = [
+    ("share/jupyter/labextensions/%s" % labext_name, str(lab_path), "**"),
+    ("share/jupyter/labextensions/%s" % labext_name, str(HERE), "install.json"),
+    ("etc/jupyter/jupyter_server_config.d",
+     "jupyter-config", "jupyterlab-chameleon.json"),
+]
+
+cmdclass = create_cmdclass("jsdeps",
+    package_data_spec=package_data_spec,
+    data_files_spec=data_files_spec
+)
+
+js_command = combine_commands(
+    install_npm(HERE, build_cmd="build:prod", npm=["jlpm"]),
+    ensure_targets(jstargets),
+)
+
+is_repo = (HERE / ".git").exists()
+if is_repo:
+    cmdclass["jsdeps"] = js_command
+else:
+    cmdclass["jsdeps"] = skip_if_exists(jstargets, js_command)
 
 setup_args = dict(
-    name="jupyterlab-chameleon",
-    description="JupyterLab extensions for the Chameleon testbed",
-    version="1.2.3",
-    author="University of Chicago",
-    author_email="dev@chameleoncloud.org",
-    url="https://github.com/chameleoncloud/jupyterlab-chameleon",
-    license="MIT",
+    name=name,
+    version=pkg_json["version"],
+    url=pkg_json["homepage"],
+    author=pkg_json["author"]["name"],
+    author_email=pkg_json["author"]["email"],
+    description=pkg_json["description"],
+    license=pkg_json["license"],
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    cmdclass=cmdclass,
+    packages=setuptools.find_packages(),
+    install_requires=[
+        "ansible_runner",
+        "ipykernel",
+        "ipython>=5.0.0",
+        "jupyterlab~=3.0",
+        "jupyter_client",
+        "keystoneauth1",
+        "remote_ikernel",
+    ],
+    zip_safe=False,
+    include_package_data=True,
+    python_requires=">=3.6",
     platforms="Linux, Mac OS X, Windows",
-    keywords=["jupyter", "ipython", "kernel"],
-    long_description=README,
+    keywords=["Jupyter", "JupyterLab", "JupyterLab3"],
     classifiers=[
-        "Intended Audience :: Developers",
-        "Intended Audience :: System Administrators",
-        "Intended Audience :: Science/Research",
         "License :: OSI Approved :: BSD License",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Framework :: Jupyter",
     ],
-    packages=find_packages(),
-    zip_safe=False,
-    install_requires=[
-        "ansible-runner",
-        "ipykernel",
-        "ipython>=5.0.0",
-        "jupyter_client",
-        "keystoneauth1",
-        "python-swiftclient",
-        "remote_ikernel",
-    ],
-    include_package_data=True,
-    long_description_content_type="text/markdown",
     entry_points={
         'bash_kernel.tasks': [
             'refresh_access_token = jupyterlab_chameleon.extensions.bash_kernel:refresh_access_token_task'
         ]
     },
-    data_files=[
-        ('etc/jupyter/jupyter_notebook_config.d', [
-            'jupyter-config/jupyter_notebook_config.d/jupyterlab_chameleon.json'
-        ]),
-    ],
-    package_data={
-        'jupyterlab_chameleon': ['db_schema.sql'],
-    },
 )
 
+
 if __name__ == "__main__":
-    setup(**setup_args)
+    setuptools.setup(**setup_args)

@@ -1,6 +1,6 @@
 {
   "name": "@chameleoncloud/jupyterlab-chameleon",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "JupyterLab extension for the Chameleon testbed",
   "keywords": [
     "jupyter",
@@ -19,7 +19,10 @@
     "url": "https://github.com/ChameleonCloud/jupyterlab-chameleon.git"
   },
   "license": "None",
-  "author": "University of Chicago",
+  "author": {
+    "name": "University of Chicago",
+    "email": "contact@chameleoncloud.org"
+  },
   "files": [
     "lib/*/*d.ts",
     "lib/*/*.js",
@@ -111,7 +114,7 @@
           "pip"
         ],
         "base": {
-          "name": "jupyterlab_chameleon"
+          "name": "jupyterlab-chameleon"
         }
       }
     },
