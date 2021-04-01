@@ -13,7 +13,15 @@ Then, use the `jlpm` binary provided by the `jupyterlab` Python module to
 build and test the extension.
 
 ```bash
-jlpm
+# 'watch' should automatically recompile .ts files on change and recompile
+# the extension for JupyterLab.
+jlpm watch
+```
+
+To test the extension within JupyterLab, run it in a separate tab:
+
+```bash
+jupyter lab --extensions-in-dev-mode
 ```
 
 ## Server extension
