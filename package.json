@@ -43,7 +43,7 @@
     "build:prod": "jlpm run build:lib && jlpm run build:labextension",
     "clean": "jlpm run clean:lib",
     "clean:all": "jlpm run clean:lib && jlpm run clean:labextension",
-    "clean:labextension": "rimraf jupyterlab-chameleon/labextension",
+    "clean:labextension": "rimraf jupyterlab_chameleon/labextension",
     "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
     "eslint": "eslint . --ext .ts,.tsx --fix",
     "eslint:check": "eslint . --ext .ts,.tsx",
@@ -115,7 +115,7 @@
         }
       }
     },
-    "outputDir": "jupyterlab-chameleon/labextension"
+    "outputDir": "jupyterlab_chameleon/labextension"
   },
   "styleModule": "style/index.js"
 }
