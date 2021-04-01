@@ -17,9 +17,14 @@ class HeartbeatHandler(APIHandler, ErrorResponder):
             self.write({"expires_at": expires_at})
             self.finish()
         except (AuthenticationError, Unauthorized) as err:
+            try:
+                reauthenticate_link = jupyterhub_public_url('auth/refresh')
+            except Exception as _err:
+                self.log.error(_err)
+                reauthenticate_link = None
             return self.error_response(
                 status=401, message=next(iter(err.args), "Unknown error"),
-                reauthenticate_link=jupyterhub_public_url('auth/refresh'))
+                reauthenticate_link=reauthenticate_link)
         except Exception as err:
             self.log.error(err)
             return self.error_response(

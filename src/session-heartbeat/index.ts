@@ -8,12 +8,16 @@ import { ServerConnection } from '@jupyterlab/services';
 
 class Heartbeat {
   start() {
-    window.clearTimeout(this._heartbeatTimer);
+    this.stop();
     this._heartbeatTimer = window.setInterval(async () => {
       await this._beat();
     }, this._interval);
     // Immediately check
     void this._beat();
+  }
+
+  stop() {
+    window.clearTimeout(this._heartbeatTimer);
   }
 
   async _beat() {
@@ -28,7 +32,10 @@ class Heartbeat {
     if (response.status === 200) {
       console.debug(`Session ok until ${json.expires_at}`);
     } else if (response.status === 401) {
-      await this._reauthenticate(json.reauthenticate_link);
+      this.stop();
+      await this._reauthenticate(
+        json.reauthenticate_link || document.location.href
+      );
     }
   }
 
