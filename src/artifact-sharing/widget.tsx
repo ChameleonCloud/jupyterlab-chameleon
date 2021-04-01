@@ -197,7 +197,7 @@ export class ArtifactSharingComponent extends React.Component<
     window.addEventListener('message', this.onMessage);
   }
 
-  async onMessage(event: MessageEvent): void {
+  async onMessage(event: MessageEvent): Promise<void> {
     if (!this.props.urlFactory.isExternalUrl(event.origin)) {
       return;
     }
@@ -247,7 +247,7 @@ export class ArtifactSharingComponent extends React.Component<
     }
   }
 
-  async onSubmit(event: React.FormEvent): void {
+  async onSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
     this.setState({ currentState: WidgetState.WAITING });
     try {
