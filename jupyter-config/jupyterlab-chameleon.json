@@ -3,5 +3,10 @@
     "jpserver_extensions": {
       "jupyterlab_chameleon": true
     }
+  },
+  "NotebookApp": {
+    "nbserver_extensions": {
+      "jupyterlab_chameleon": true
+    }
   }
 }
