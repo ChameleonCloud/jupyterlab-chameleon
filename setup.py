@@ -43,6 +43,10 @@ data_files_spec = [
     ("share/jupyter/labextensions/%s" % labext_name, str(HERE), "install.json"),
     ("etc/jupyter/jupyter_server_config.d",
      "jupyter-config", "jupyterlab-chameleon.json"),
+    # NOTE(jason): this shouldn't be necessary; investigate what is going on
+    # where extensions aren't being properly enabled on install.
+    ("etc/jupyter/jupyter_notebook_config.d",
+     "jupyter-config", "jupyterlab-chameleon.json"),
 ]
 
 cmdclass = create_cmdclass("jsdeps",

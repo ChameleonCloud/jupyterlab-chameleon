@@ -154,8 +154,6 @@ class ArtifactHandler(APIHandler, ErrorResponder):
         self.notebook_dir = notebook_dir or '.'
 
     def _normalize_path(self, path):
-        if not path:
-            return None
         if not path.startswith('/'):
             path = os.path.join(self.notebook_dir, path)
         return os.path.normpath(path)
@@ -215,7 +213,7 @@ class ArtifactHandler(APIHandler, ErrorResponder):
             body = json.loads(self.request.body.decode('utf-8'))
             artifact = Artifact(
                 id=body.get('id'),
-                path=(self._normalize_path(body.get('path'))
+                path=(self._normalize_path(body.get('path', '.'))
                     .replace(f'{self.notebook_dir}', '.')),
                 deposition_repo=body.get('deposition_repo'),
                 ownership=body.get('ownership')
