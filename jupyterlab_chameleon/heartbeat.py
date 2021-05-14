@@ -2,7 +2,7 @@ from keystoneauth1.exceptions import Unauthorized
 from jupyter_server.base.handlers import APIHandler
 from tornado import web
 
-from .exception import AuthenticationError
+from .exception import AuthenticationError, JupyterHubNotDetected
 from .util import ErrorResponder, jupyterhub_public_url, refresh_access_token
 
 
@@ -25,6 +25,11 @@ class HeartbeatHandler(APIHandler, ErrorResponder):
             return self.error_response(
                 status=401, message=next(iter(err.args), "Unknown error"),
                 reauthenticate_link=reauthenticate_link)
+        except JupyterHubNotDetected:
+            return self.error_response(
+                status=405,
+                message=("No JupyterHub detected, and this endpoint requires "
+                         "Hub communication"))
         except Exception as err:
             self.log.error(err)
             return self.error_response(

@@ -3,7 +3,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import requests
 
-from .exception import AuthenticationError
+from .exception import AuthenticationError, JupyterHubNotDetected
 
 ACCESS_TOKEN_ENDPOINT = 'tokens'
 
@@ -13,7 +13,7 @@ def call_jupyterhub_api(path: str, query: 'list[tuple[str,str]]'=[], method: str
     hub_token = os.getenv('JUPYTERHUB_API_TOKEN')
 
     if not (hub_api_url and hub_token):
-        raise AuthenticationError('Missing JupyterHub authentication info')
+        raise JupyterHubNotDetected('Missing JupyterHub authentication info')
 
     hub_url_parsed = urlsplit(hub_api_url)
     hub_url_replaced = hub_url_parsed._replace(
@@ -34,7 +34,7 @@ def jupyterhub_public_url(path: str) -> str:
     hub_public_url = os.getenv('JUPYTERHUB_PUBLIC_URL')
 
     if not hub_public_url:
-        raise ValueError('No public URL found for JupyterHub')
+        raise JupyterHubNotDetected('No public URL found for JupyterHub')
 
     return f"{hub_public_url.rstrip('/')}/{path.lstrip('/')}"
 

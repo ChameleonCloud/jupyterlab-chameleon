@@ -4,6 +4,9 @@ class AuthenticationError(Exception):
 class BadRequestError(Exception):
     pass
 
+class JupyterHubNotDetected(Exception):
+    pass
+
 class IllegalArchiveError(Exception):
     pass
 

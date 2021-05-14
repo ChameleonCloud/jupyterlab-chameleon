@@ -4,6 +4,7 @@ import time
 
 from functools import partial
 
+from ipykernel.comm import Comm
 from ipykernel.jsonutil import json_clean
 from ipykernel.ipkernel import IPythonKernel
 from ipython_genutils import py3compat
@@ -21,9 +22,6 @@ __version__ = "0.0.1"
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
-fh = logging.FileHandler("hydra.log")
-fh.setLevel(logging.DEBUG)
-LOG.addHandler(fh)
 
 # Do some subclassing to ensure we are spawning threaded clients
 # for our proxy kernels (the default is blocking.)
@@ -56,8 +54,8 @@ class MultiplexerKernelManager(IOLoopKernelManager):
     def _launch_kernel(self, kernel_cmd, **kw):
         # Write inventory?
         ansible_runner.run(
-            private_data_dir='ansible', 
-            playbook='kernel_action.yml', 
+            private_data_dir='ansible',
+            playbook='kernel_action.yml',
             extra_vars=dict(kernel_action='start')
         )
         # Can SSH to the remote host and launch the kernel there...
@@ -138,7 +136,7 @@ def spawn_kernel(kernel_manager):
         raise
 
     return km, kc
-    
+
 class HydraKernel(IPythonKernel):
     """
     Hydra Kernel
@@ -157,7 +155,7 @@ class HydraKernel(IPythonKernel):
     _kernels = {}
 
     def __init__(self, **kwargs):
-        super(HydraKernel, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.binding_manager = BindingManager()
         # Register additional magics
         if self.shell:
@@ -165,6 +163,11 @@ class HydraKernel(IPythonKernel):
             self.shell.register_magics(binding_magics)
 
         self.kernel_manager = MultiplexerMultiKernelManager()
+
+    def start(self):
+        super().start()
+        self.banana = Comm("banana", data={})
+        self.banana.send("hello")
 
     @property
     def banner(self):
@@ -207,5 +210,5 @@ class HydraKernel(IPythonKernel):
         kc.iopub_channel.unpipe()
         kc.shell_channel.unpipe()
 
-        if not silent and reply_content["status"] == "error" and stop_on_error:
+        if not silent and proxy.reply_content["status"] == "error" and stop_on_error:
             yield self._abort_queues()

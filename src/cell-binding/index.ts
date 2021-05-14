@@ -2,6 +2,7 @@ import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
+import { ISessionContext } from '@jupyterlab/apputils';
 import { Cell, ICellModel } from '@jupyterlab/cells';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 import { INotebookModel, NotebookPanel } from '@jupyterlab/notebook';
@@ -95,23 +96,43 @@ export class CodeCellExtension
       { name: 'uc_client' }
     ] as IBindingModel[];
 
-    const cellMetadata = new CellMetadata();
-
     const switcher = new CellBindingSwitcher(
       panel.content,
       bindings,
-      cellMetadata
+      this._cellMetadata
     );
+    const onCellsChanged = this._cellChangeCallback(panel, bindings);
+
     panel.toolbar.insertBefore('spacer', 'changeBinding', switcher);
     // Hide the binding switch UI for non-code cells.
     panel.content.activeCellChanged.connect((notebook, cell) => {
       switcher.setHidden(!!cell && cell.model.type !== 'code');
     });
+    panel.model.cells.changed.connect(onCellsChanged);
 
-    const onCellsChanged = (
+    panel.sessionContext.kernelChanged.connect((sessionContext, args) => {
+      const kernel = args.newValue;
+      kernel.registerCommTarget('banana', (comm, msg) => {
+        console.log(comm);
+        console.log(msg);
+      });
+    });
+    // const onSessionChanged = (sessionContext: ISessionContext) => {
+    // };
+    // panel.sessionContext.sessionChanged.connect(onSessionChanged);
+
+    return new DisposableDelegate(() => {
+      panel.model.cells.changed.disconnect(onCellsChanged);
+      this._cellMetadata.dispose();
+      switcher.dispose();
+    });
+  }
+
+  _cellChangeCallback(panel: NotebookPanel, bindings: IBindingModel[]) {
+    return (
       cells: IObservableList<ICellModel>,
       changed: IObservableList.IChangedArgs<ICellModel>
-    ) => {
+    ): void => {
       const cellModel = cells.get(changed.newIndex);
 
       switch (changed.type) {
@@ -121,18 +142,25 @@ export class CodeCellExtension
               w => w.model === cellModel
             );
 
-            if (changed.newIndex > 0 && !cellMetadata.hasBinding(cellModel)) {
+            if (
+              changed.newIndex > 0 &&
+              !this._cellMetadata.hasBinding(cellModel)
+            ) {
               // Copy cell binding from previous cell
               const previousCell = cells.get(changed.newIndex - 1);
-              cellMetadata.setBindingName(
+              this._cellMetadata.setBindingName(
                 cellModel,
-                cellMetadata.getBindingName(previousCell)
+                this._cellMetadata.getBindingName(previousCell)
               );
             }
 
-            Private.updateCellDisplay(cellWidget, cellMetadata, bindings);
-            cellMetadata.onBindingNameChanged(cellModel, () => {
-              Private.updateCellDisplay(cellWidget, cellMetadata, bindings);
+            Private.updateCellDisplay(cellWidget, this._cellMetadata, bindings);
+            this._cellMetadata.onBindingNameChanged(cellModel, () => {
+              Private.updateCellDisplay(
+                cellWidget,
+                this._cellMetadata,
+                bindings
+              );
             });
           }
           break;
@@ -140,15 +168,9 @@ export class CodeCellExtension
           break;
       }
     };
-
-    panel.model.cells.changed.connect(onCellsChanged);
-
-    return new DisposableDelegate(() => {
-      panel.model.cells.changed.disconnect(onCellsChanged);
-      cellMetadata.dispose();
-      switcher.dispose();
-    });
   }
+
+  private _cellMetadata: CellMetadata = new CellMetadata();
 }
 
 const plugin: JupyterFrontEndPlugin<void> = {

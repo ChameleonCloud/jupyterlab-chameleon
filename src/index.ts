@@ -2,7 +2,7 @@ import { JupyterFrontEndPlugin } from '@jupyterlab/application';
 
 import artifactSharingPlugins from './artifact-sharing';
 import sessionHeartbeatPlugin from './session-heartbeat';
-// import cellBindingPlugin from './cell-binding';
+import cellBindingPlugin from './cell-binding';
 
 /**
  * Export the plugins as default.
@@ -10,6 +10,6 @@ import sessionHeartbeatPlugin from './session-heartbeat';
 const plugins: JupyterFrontEndPlugin<any>[] = [];
 artifactSharingPlugins.forEach(plugin => plugins.push(plugin));
 plugins.push(sessionHeartbeatPlugin);
-// cellBindingPlugin
+plugins.push(cellBindingPlugin);
 
 export default plugins;

@@ -59,11 +59,7 @@ js_command = combine_commands(
     ensure_targets(jstargets),
 )
 
-is_repo = (HERE / ".git").exists()
-if is_repo:
-    cmdclass["jsdeps"] = js_command
-else:
-    cmdclass["jsdeps"] = skip_if_exists(jstargets, js_command)
+cmdclass["jsdeps"] = skip_if_exists(jstargets, js_command)
 
 setup_args = dict(
     name=name,

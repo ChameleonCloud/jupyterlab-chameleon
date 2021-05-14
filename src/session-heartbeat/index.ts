@@ -13,7 +13,7 @@ class Heartbeat {
       await this._beat();
     }, this._interval);
     // Immediately check
-    void this._beat();
+    this._beat();
   }
 
   stop() {
@@ -36,6 +36,9 @@ class Heartbeat {
       await this._reauthenticate(
         json.reauthenticate_link || document.location.href
       );
+    } else if (response.status === 405) {
+      this.stop();
+      console.debug('Disabling session heartbeat; hearbeat not supported.');
     }
   }
 
