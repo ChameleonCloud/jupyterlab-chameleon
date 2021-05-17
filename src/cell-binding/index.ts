@@ -110,16 +110,21 @@ export class CodeCellExtension
     });
     panel.model.cells.changed.connect(onCellsChanged);
 
-    panel.sessionContext.kernelChanged.connect((sessionContext, args) => {
+    panel.sessionContext.kernelChanged.connect(async (sessionContext, args) => {
       const kernel = args.newValue;
-      kernel.registerCommTarget('banana', (comm, msg) => {
-        console.log(comm);
-        console.log(msg);
-      });
+      if (kernel) {
+        const comm = kernel.createComm('banana');
+        comm.onMsg = msg => {
+          console.log('got message', msg);
+        };
+        comm.open();
+        comm.send({ event: 'binding_list_request' });
+      }
     });
-    // const onSessionChanged = (sessionContext: ISessionContext) => {
-    // };
-    // panel.sessionContext.sessionChanged.connect(onSessionChanged);
+    const onSessionChanged = (sessionContext: ISessionContext) => {
+      console.log(sessionContext);
+    };
+    panel.sessionContext.sessionChanged.connect(onSessionChanged);
 
     return new DisposableDelegate(() => {
       panel.model.cells.changed.disconnect(onCellsChanged);

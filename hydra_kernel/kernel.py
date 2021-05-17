@@ -15,13 +15,14 @@ from jupyter_client.threaded import ThreadedKernelClient, ThreadedZMQSocketChann
 from tornado import gen
 from traitlets import Type
 
-from .binding import BindingManager
+from .binding import Binding, BindingManager
 from .magics import BindingMagics
 
 __version__ = "0.0.1"
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
+LOG.addHandler(logging.FileHandler("hydra.log"))
 
 # Do some subclassing to ensure we are spawning threaded clients
 # for our proxy kernels (the default is blocking.)
@@ -142,6 +143,8 @@ class HydraKernel(IPythonKernel):
     Hydra Kernel
     """
 
+    log = LOG
+
     implementation = "hydra_kernel"
     implementation_version = __version__
 
@@ -153,21 +156,48 @@ class HydraKernel(IPythonKernel):
     }
 
     _kernels = {}
+    _comm = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.binding_manager = BindingManager()
-        # Register additional magics
         if self.shell:
             binding_magics = BindingMagics(self.shell, self.binding_manager)
             self.shell.register_magics(binding_magics)
 
+        self.binding_manager.on_change(self.on_binding_change)
         self.kernel_manager = MultiplexerMultiKernelManager()
 
     def start(self):
         super().start()
-        self.banana = Comm("banana", data={})
-        self.banana.send("hello")
+        LOG.debug("Registering comm channel")
+        self.comm_manager.register_target("banana", self.register_banana)
+
+    def register_banana(self, comm: Comm, message: dict):
+        if self._comm:
+            self._comm.on_msg(None)
+        self._comm = comm
+        self._comm.on_msg(self.on_comm_msg)
+        LOG.debug(f"Registered comm channel {comm} with open request {message}")
+
+    def on_binding_change(self, binding: Binding, change: dict):
+        if self._comm:
+            self._comm.send({
+                "event": "binding_update",
+                "binding": binding.as_dict()
+            })
+
+    def on_comm_msg(self, message: dict):
+        payload = message.get("content", {}).get("data", {})
+        LOG.debug(f"Got message: {payload}")
+        if payload["event"] == "binding_list_request":
+            if self._comm:
+                self._comm.send({
+                    "event": "binding_list_reply",
+                    "bindings": [
+                        b.as_dict() for b in self.binding_manager.list()
+                    ]
+                })
 
     @property
     def banner(self):
@@ -189,7 +219,7 @@ class HydraKernel(IPythonKernel):
             self.log.debug("Creating sub-kernel for %s", binding_name)
             self._kernels[binding_name] = spawn_kernel(self.kernel_manager)
 
-        km, kc = self._kernels[binding_name]
+        _, kc = self._kernels[binding_name]
 
         # TODO: add parent in here?
         msg = kc.session.msg("execute_request", content)
