@@ -37,12 +37,17 @@ class RemoteKernelSpecManager(KernelSpecManager):
     binding = Instance(Binding)
 
     def find_kernel_specs(self):
+        LOG.debug("find_kernel_specs")
+        self.binding.exec("ls -al /etc")
         return super().find_kernel_specs()
 
     def remove_kernel_spec(self, name):
         return super().remove_kernel_spec(name)
 
     def get_kernel_spec(self, kernel_name):
+        LOG.debug(f"get_kernel_spec: {kernel_name}")
+        with self.binding.get_file("/etc/resolv.conf") as f:
+            LOG.debug(f.read().decode("utf-8"))
         # TODO: this really needs to look up the paths on the host directly.
         # For now, we assume kernels are installed in /etc/jupyter or
         # /usr/local/share/jupyter
@@ -50,6 +55,7 @@ class RemoteKernelSpecManager(KernelSpecManager):
         return super().get_kernel_spec(kernel_name)
 
     def install_kernel_spec(self, _, kernel_name, **kwargs):
+        LOG.debug(f"install_kernel_spec: {kernel_name}")
         data_dir = os.path.join(sys.prefix, "share", "hydra-kernel")
         host_vars = self._host_vars()
 

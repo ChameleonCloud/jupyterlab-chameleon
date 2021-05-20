@@ -19,11 +19,9 @@ from .magics import BindingMagics
 if typing.TYPE_CHECKING:
     from jupyter_client import KernelClient, KernelManager
 
-__version__ = "0.0.1"
-
 LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
-LOG.addHandler(logging.FileHandler("hydra.log"))
+
+__version__ = "0.0.1"
 
 # Do some subclassing to ensure we are spawning threaded clients
 # for our proxy kernels (the default is blocking.)
@@ -66,6 +64,7 @@ class HydraKernelManager(IOLoopKernelManager):
         self.kernel_spec_manager = RemoteKernelSpecManager(binding=binding)
 
     def pre_start_kernel(self, **kw):
+        LOG.debug(f"Looking for kernel in {self.kernel_spec_manager}")
         try:
             self.kernel_spec_manager.get_kernel_spec(self.kernel_name)
         except NoSuchKernel:

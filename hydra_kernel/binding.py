@@ -1,6 +1,15 @@
+from contextlib import contextmanager
+import io
 import ipaddress
+import logging
+import tempfile
 
+from paramiko.client import AutoAddPolicy, SSHClient
+from paramiko.ssh_exception import SSHException
+from scp import SCPClient
 from traitlets.traitlets import Enum, HasTraits, Dict, Unicode
+
+LOG = logging.getLogger(__name__)
 
 DEFAULT_KERNEL = 'bash'
 SUPPORTED_KERNELS = (
@@ -24,6 +33,34 @@ class Binding(HasTraits):
             trait: trait_type.get(self)
             for trait, trait_type in self.traits().items()
         }
+
+    def _ssh_connect(self) -> "SSHClient":
+        client = SSHClient()
+        # TODO: allow configuring host key checking
+        client.set_missing_host_key_policy(AutoAddPolicy)
+        client.connect(
+            self.connection["host"],
+            username=self.connection.get("user"),
+            key_filename=self.connection.get("ssh_private_key_file"),
+        )
+        return client
+
+    def exec(self, command: "str", timeout=None):
+        with self._ssh_connect() as ssh:
+            _, stdout, stderr = ssh.exec_command(command, timeout=timeout)
+            LOG.debug(f"stdout: {stdout.read()}")
+            LOG.debug(f"stderr: {stderr.read()}")
+
+    @contextmanager
+    def get_file(self, path: "str") -> "io.BytesIO":
+        with self._ssh_connect() as ssh:
+            scp = SCPClient(ssh.get_transport())
+            with tempfile.NamedTemporaryFile() as tmpf:
+                LOG.debug(f"{path} -> {tmpf.name}")
+                scp.get(path, tmpf.name)
+                tmpf.seek(0)
+                yield tmpf
+
 
 class BindingManager(object):
 
