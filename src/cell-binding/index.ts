@@ -4,6 +4,7 @@ import {
 } from '@jupyterlab/application';
 import { ISessionContext } from '@jupyterlab/apputils';
 import { Cell, ICellModel } from '@jupyterlab/cells';
+import { IChangedArgs } from '@jupyterlab/coreutils';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
 import { INotebookModel, NotebookPanel } from '@jupyterlab/notebook';
 import {
@@ -11,6 +12,11 @@ import {
   IObservableList,
   IObservableMap
 } from '@jupyterlab/observables';
+import { KernelMessage } from '@jupyterlab/services';
+import {
+  IComm,
+  IKernelConnection
+} from '@jupyterlab/services/lib/kernel/kernel';
 import { ReadonlyPartialJSONValue } from '@lumino/coreutils';
 import { DisposableDelegate, IDisposable } from '@lumino/disposable';
 import { Slot } from '@lumino/signaling';
@@ -86,54 +92,74 @@ export class CodeCellExtension
     panel: NotebookPanel,
     context: DocumentRegistry.IContext<INotebookModel>
   ): IDisposable {
-    // TODO: this needs to be pulled remotely somehow,
-    // and it needs to subscribe to updates from somewhere
-    // (the kernel?)
-    const bindings = [
-      { name: 'tacc_p4' },
-      { name: 'tacc_server' },
-      { name: 'uc_p4' },
-      { name: 'uc_client' }
-    ] as IBindingModel[];
+    const bindingProvider = () => {
+      return this._bindings;
+    };
 
     const switcher = new CellBindingSwitcher(
       panel.content,
-      bindings,
+      bindingProvider,
       this._cellMetadata
     );
-    const onCellsChanged = this._cellChangeCallback(panel, bindings);
-
     panel.toolbar.insertBefore('spacer', 'changeBinding', switcher);
     // Hide the binding switch UI for non-code cells.
     panel.content.activeCellChanged.connect((notebook, cell) => {
       switcher.setHidden(!!cell && cell.model.type !== 'code');
     });
+
+    const onCellsChanged = this._cellChangeCallback(panel, bindingProvider);
     panel.model.cells.changed.connect(onCellsChanged);
 
-    panel.sessionContext.kernelChanged.connect(async (sessionContext, args) => {
-      const kernel = args.newValue;
-      if (kernel) {
-        const comm = kernel.createComm('banana');
-        comm.onMsg = msg => {
-          console.log('got message', msg);
-        };
-        comm.open();
-        comm.send({ event: 'binding_list_request' });
-      }
-    });
-    const onSessionChanged = (sessionContext: ISessionContext) => {
-      console.log(sessionContext);
-    };
-    panel.sessionContext.sessionChanged.connect(onSessionChanged);
+    const onKernelChanged = this._kernelChangeCallback();
+    panel.sessionContext.kernelChanged.connect(onKernelChanged);
 
     return new DisposableDelegate(() => {
       panel.model.cells.changed.disconnect(onCellsChanged);
+      panel.sessionContext.kernelChanged.disconnect(onKernelChanged);
       this._cellMetadata.dispose();
       switcher.dispose();
     });
   }
 
-  _cellChangeCallback(panel: NotebookPanel, bindings: IBindingModel[]) {
+  private _onCommMsg(message: KernelMessage.ICommMsgMsg) {
+    const data = message?.content?.data;
+    console.log('Got message: ', data);
+    const { event } = data || {};
+    switch (event) {
+      case 'binding_list_reply':
+        this._bindings = (data.bindings as unknown) as IBindingModel[];
+        break;
+      default:
+        break;
+    }
+  }
+
+  private _kernelChangeCallback() {
+    return (
+      sessionContext: ISessionContext,
+      changed: IChangedArgs<IKernelConnection>
+    ): void => {
+      const kernel = changed.newValue;
+      if (!kernel) {
+        return;
+      }
+
+      if (this._comm) {
+        this._comm.onMsg = null;
+        this._comm.close();
+      }
+
+      this._comm = kernel.createComm('banana');
+      this._comm.onMsg = this._onCommMsg.bind(this);
+      this._comm.open();
+      this._comm.send({ event: 'binding_list_request' });
+    };
+  }
+
+  private _cellChangeCallback(
+    panel: NotebookPanel,
+    bindingProvider: () => IBindingModel[]
+  ) {
     return (
       cells: IObservableList<ICellModel>,
       changed: IObservableList.IChangedArgs<ICellModel>
@@ -159,6 +185,7 @@ export class CodeCellExtension
               );
             }
 
+            const bindings = bindingProvider();
             Private.updateCellDisplay(cellWidget, this._cellMetadata, bindings);
             this._cellMetadata.onBindingNameChanged(cellModel, () => {
               Private.updateCellDisplay(
@@ -175,6 +202,8 @@ export class CodeCellExtension
     };
   }
 
+  private _bindings: IBindingModel[] = [];
+  private _comm: IComm;
   private _cellMetadata: CellMetadata = new CellMetadata();
 }
 

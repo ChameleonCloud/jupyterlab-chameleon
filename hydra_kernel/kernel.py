@@ -1,22 +1,23 @@
 import logging
-import sys
 import time
-
-from functools import partial
+import typing
 
 from ipykernel.comm import Comm
-from ipykernel.jsonutil import json_clean
 from ipykernel.ipkernel import IPythonKernel
-from ipython_genutils import py3compat
 from jupyter_client.connect import tunnel_to_kernel
 from jupyter_client.ioloop.manager import IOLoopKernelManager
+from jupyter_client.kernelspec import NoSuchKernel
 from jupyter_client.multikernelmanager import MultiKernelManager
 from jupyter_client.threaded import ThreadedKernelClient, ThreadedZMQSocketChannel
 from tornado import gen
-from traitlets import Type
+from traitlets.traitlets import Bool, Type
 
 from .binding import Binding, BindingManager
+from .kernelspec import RemoteKernelSpecManager
 from .magics import BindingMagics
+
+if typing.TYPE_CHECKING:
+    from jupyter_client import KernelClient, KernelManager
 
 __version__ = "0.0.1"
 
@@ -26,9 +27,9 @@ LOG.addHandler(logging.FileHandler("hydra.log"))
 
 # Do some subclassing to ensure we are spawning threaded clients
 # for our proxy kernels (the default is blocking.)
-class MultiplexerZMQSocketChannel(ThreadedZMQSocketChannel):
+class HydraChannel(ThreadedZMQSocketChannel):
     def __init__(self, socket, session, loop):
-        super(MultiplexerZMQSocketChannel, self).__init__(socket, session, loop)
+        super(HydraChannel, self).__init__(socket, session, loop)
         self._pipes = []
 
     def call_handlers(self, msg):
@@ -42,32 +43,63 @@ class MultiplexerZMQSocketChannel(ThreadedZMQSocketChannel):
         self._pipes = []
 
 
-class MultiplexerKernelClient(ThreadedKernelClient):
-    shell_channel_class = Type(MultiplexerZMQSocketChannel)
-    iopub_channel_class = Type(MultiplexerZMQSocketChannel)
+class HydraKernelClient(ThreadedKernelClient):
+    shell_channel_class = Type(HydraChannel)
+    iopub_channel_class = Type(HydraChannel)
 
 
-import ansible_runner
+class HydraKernelManager(IOLoopKernelManager):
+    client_class = "hydra_kernel.kernel.HydraKernelClient"
 
-class MultiplexerKernelManager(IOLoopKernelManager):
-    client_class = "hydra_kernel.kernel.MultiplexerKernelClient"
+    tunnel = Bool(True, help=(
+        "If set, connection to remote kernel will be established over an SSH "
+        "tunnel. Remote kernels on loopback hosts will not have tunnels."))
 
-    def _launch_kernel(self, kernel_cmd, **kw):
-        # Write inventory?
-        ansible_runner.run(
-            private_data_dir='ansible',
-            playbook='kernel_action.yml',
-            extra_vars=dict(kernel_action='start')
-        )
-        # Can SSH to the remote host and launch the kernel there...
-        # then write the connection file remotely...
-        # then see which ports were selected...
-        # then tunnel to those ports over SSH...
-        return super(MultiplexerKernelManager, self)._launch_kernel(kernel_cmd, **kw)
+    _binding: Binding = None
+
+    @property
+    def needs_tunnel(self):
+        return self.tunnel and not self._binding.is_loopback
+
+    def init_binding(self, binding: Binding):
+        self._binding = binding
+        self.kernel_spec_manager = RemoteKernelSpecManager(binding=binding)
+
+    def pre_start_kernel(self, **kw):
+        try:
+            self.kernel_spec_manager.get_kernel_spec(self.kernel_name)
+        except NoSuchKernel:
+            self.kernel_spec_manager.install_kernel_spec(None, kernel_name=self.kernel_name)
+
+        # A side effect of writing the connection file is random port selection.
+        self.write_connection_file()
+
+        if self.needs_tunnel:
+            conn = self._binding.connection
+            sshkey = conn.get("ssh_private_key_file")
+            sshserver = f"{conn.get('user')}@{conn.get('host')}"
+            (
+                self.shell_port,
+                self.iopub_port,
+                self.stdin_port,
+                self.hb_port,
+                self.control_port
+            ) = tunnel_to_kernel(self.get_connection_info(), sshserver, sshkey=sshkey)
+
+        return super().pre_start_kernel(**kw)
 
 
-class MultiplexerMultiKernelManager(MultiKernelManager):
-    kernel_manager_class = "hydra_kernel.kernel.MultiplexerKernelManager"
+class HydraMultiKernelManager(MultiKernelManager):
+    kernel_manager_class = "hydra_kernel.kernel.HydraKernelManager"
+
+    def pre_start_kernel(self, kernel_name, kwargs):
+        (
+            km,
+            kernel_name,
+            kernel_id
+        ) = super().pre_start_kernel(kernel_name, kwargs)
+        km.init_binding(kwargs.pop("binding"))
+        return km, kernel_name, kernel_id
 
 
 class ProxyComms(object):
@@ -124,12 +156,12 @@ class ProxyComms(object):
             self._reply_content = content
 
 
-def spawn_kernel(kernel_manager):
-    kernel_id = kernel_manager.start_kernel('bash')
-    km = kernel_manager.get_kernel(kernel_id)
+def spawn_kernel(kernel_manager: "MultiKernelManager", binding: "Binding") -> "tuple[KernelManager,KernelClient]":
+    kernel_id: "str" = kernel_manager.start_kernel(binding.kernel, binding=binding)
+    km: "KernelManager" = kernel_manager.get_kernel(kernel_id)
 
     try:
-        kc = km.client()
+        kc: "KernelClient" = km.client()
         # Only connect shell and iopub channels
         kc.start_channels(shell=True, iopub=True, stdin=False, hb=False)
     except RuntimeError:
@@ -137,6 +169,7 @@ def spawn_kernel(kernel_manager):
         raise
 
     return km, kc
+
 
 class HydraKernel(IPythonKernel):
     """
@@ -155,8 +188,8 @@ class HydraKernel(IPythonKernel):
         "file_extension": ".py",
     }
 
-    _kernels = {}
-    _comm = None
+    _kernels: "dict[str,tuple[KernelManager,KernelClient]]" = {}
+    _comm: "Comm" = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -166,28 +199,28 @@ class HydraKernel(IPythonKernel):
             self.shell.register_magics(binding_magics)
 
         self.binding_manager.on_change(self.on_binding_change)
-        self.kernel_manager = MultiplexerMultiKernelManager()
+        self.kernel_manager = HydraMultiKernelManager()
 
     def start(self):
         super().start()
         LOG.debug("Registering comm channel")
         self.comm_manager.register_target("banana", self.register_banana)
 
-    def register_banana(self, comm: Comm, message: dict):
+    def register_banana(self, comm: "Comm", message: "dict"):
         if self._comm:
             self._comm.on_msg(None)
         self._comm = comm
         self._comm.on_msg(self.on_comm_msg)
         LOG.debug(f"Registered comm channel {comm} with open request {message}")
 
-    def on_binding_change(self, binding: Binding, change: dict):
+    def on_binding_change(self, binding: "Binding", change: "dict"):
         if self._comm:
             self._comm.send({
                 "event": "binding_update",
                 "binding": binding.as_dict()
             })
 
-    def on_comm_msg(self, message: dict):
+    def on_comm_msg(self, message: "dict"):
         payload = message.get("content", {}).get("data", {})
         LOG.debug(f"Got message: {payload}")
         if payload["event"] == "binding_list_request":
@@ -217,7 +250,11 @@ class HydraKernel(IPythonKernel):
         # Check if binding name is valid (is there a binding set up?)
         if binding_name not in self._kernels:
             self.log.debug("Creating sub-kernel for %s", binding_name)
-            self._kernels[binding_name] = spawn_kernel(self.kernel_manager)
+            binding = self.binding_manager.get(binding_name)
+            self._kernels[binding_name] = spawn_kernel(
+                self.kernel_manager,
+                binding,
+            )
 
         _, kc = self._kernels[binding_name]
 

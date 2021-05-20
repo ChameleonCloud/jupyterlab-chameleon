@@ -16,13 +16,13 @@ export class CellBindingSwitcher extends ReactWidget {
    */
   constructor(
     widget: Notebook,
-    bindings: IBindingModel[],
+    bindingProvider: () => IBindingModel[],
     cellMeta: ICellMetadata
   ) {
     super();
     this.addClass(TOOLBAR_CELLBINDING_CLASS);
     this._notebook = widget;
-    this._bindings = bindings;
+    this._bindingProvider = bindingProvider;
     this._cellMeta = cellMeta;
     if (widget.model) {
       this.update();
@@ -78,7 +78,7 @@ export class CellBindingSwitcher extends ReactWidget {
         aria-label="Binding"
       >
         <option value="-">META</option>
-        {this._bindings.map(({ name }) => (
+        {this._bindingProvider().map(({ name }) => (
           <option key={name} value={name}>
             {name}
           </option>
@@ -88,6 +88,6 @@ export class CellBindingSwitcher extends ReactWidget {
   }
 
   private _notebook: Notebook = null;
-  private _bindings: IBindingModel[] = [];
+  private _bindingProvider: () => IBindingModel[];
   private _cellMeta: ICellMetadata = null;
 }

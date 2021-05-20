@@ -1,10 +1,4 @@
-import json
-import os
-
-from jupyter_client.multikernelmanager import MultiKernelManager
-from jupyter_client.kernelspec import get_kernel_spec, install_kernel_spec, NoSuchKernel
-from remote_ikernel.manage import add_kernel
-from tempfile import TemporaryDirectory
+import ipaddress
 
 from traitlets.traitlets import Enum, HasTraits, Dict, Unicode
 
@@ -17,6 +11,13 @@ class Binding(HasTraits):
     name = Unicode(read_only=True)
     kernel = Enum(SUPPORTED_KERNELS, default_value=DEFAULT_KERNEL)
     connection = Dict()
+
+    @property
+    def is_loopback(self):
+        try:
+            return ipaddress.IPv4Address(self.connection["host"]).is_loopback
+        except ipaddress.AddressValueError:
+            return False
 
     def as_dict(self):
         return {
@@ -54,6 +55,9 @@ class BindingManager(object):
             binding.kernel = kernel
         if connection:
             binding.connection = connection
+
+    def get(self, name) -> "Binding":
+        return self._binding_map.get(name)
 
     def list(self) -> "list[Binding]":
         return self._binding_map.values()
