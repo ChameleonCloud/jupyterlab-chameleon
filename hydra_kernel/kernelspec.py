@@ -37,14 +37,21 @@ class RemoteKernelSpecManager(KernelSpecManager):
     binding = Instance(Binding)
 
     def find_kernel_specs(self):
+        if self.binding.is_loopback:
+            return super().find_kernel_specs()
+
         LOG.debug("find_kernel_specs")
         self.binding.exec("ls -al /etc")
-        return super().find_kernel_specs()
+        return {}
 
     def remove_kernel_spec(self, name):
-        return super().remove_kernel_spec(name)
+        if self.binding.is_loopback:
+            return super().remove_kernel_spec(name)
 
     def get_kernel_spec(self, kernel_name):
+        if self.binding.is_loopback:
+            return super().get_kernel_spec(kernel_name)
+
         LOG.debug(f"get_kernel_spec: {kernel_name}")
         with self.binding.get_file("/etc/resolv.conf") as f:
             LOG.debug(f.read().decode("utf-8"))
@@ -54,7 +61,10 @@ class RemoteKernelSpecManager(KernelSpecManager):
         # dirs = jupyter_path("kernels")
         return super().get_kernel_spec(kernel_name)
 
-    def install_kernel_spec(self, _, kernel_name, **kwargs):
+    def install_kernel_spec(self, source_dir, kernel_name, **kwargs):
+        if self.binding.is_loopback:
+            return super().install_kernel_spec(source_dir, kernel_name=kernel_name, **kwargs)
+
         LOG.debug(f"install_kernel_spec: {kernel_name}")
         data_dir = os.path.join(sys.prefix, "share", "hydra-kernel")
         host_vars = self._host_vars()
