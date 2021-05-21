@@ -3,11 +3,15 @@ import io
 import ipaddress
 import logging
 import tempfile
+import typing
 
 from paramiko.client import AutoAddPolicy, SSHClient
 from paramiko.ssh_exception import SSHException
 from scp import SCPClient
 from traitlets.traitlets import Enum, HasTraits, Dict, Unicode
+
+if typing.TYPE_CHECKING:
+    from paramiko.channel import ChannelFile, ChannelStderrFile
 
 LOG = logging.getLogger(__name__)
 
@@ -45,11 +49,10 @@ class Binding(HasTraits):
         )
         return client
 
-    def exec(self, command: "str", timeout=None):
+    def exec(self, command: "str", timeout=None) -> "tuple[int,ChannelFile,ChannelStderrFile]":
         with self._ssh_connect() as ssh:
             _, stdout, stderr = ssh.exec_command(command, timeout=timeout)
-            LOG.debug(f"stdout: {stdout.read()}")
-            LOG.debug(f"stderr: {stderr.read()}")
+            return stdout.channel.recv_exit_status(), stdout, stderr
 
     @contextmanager
     def get_file(self, path: "str") -> "io.BytesIO":
@@ -60,6 +63,11 @@ class Binding(HasTraits):
                 scp.get(path, tmpf.name)
                 tmpf.seek(0)
                 yield tmpf
+
+    def put_file(self, local_path: "str", remote_path: "str"):
+        with self._ssh_connect() as ssh:
+            scp = SCPClient(ssh.get_transport())
+            scp.put(local_path, remote_path)
 
 
 class BindingManager(object):

@@ -2,9 +2,7 @@ import logging
 
 from .kernel import HydraKernel, __version__
 
-logging.basicConfig()
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
-LOG.addHandler(logging.FileHandler("hydra.log"))
+logging.basicConfig(handlers=[logging.FileHandler("hydra.log")], level=logging.DEBUG)
+
 
 __all__ = ["__version__", "HydraKernel"]

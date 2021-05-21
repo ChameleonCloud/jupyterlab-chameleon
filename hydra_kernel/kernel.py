@@ -1,4 +1,9 @@
+import json
 import logging
+import os
+import pathlib
+from re import I
+import shlex
 import time
 import typing
 
@@ -9,6 +14,7 @@ from jupyter_client.ioloop.manager import IOLoopKernelManager
 from jupyter_client.kernelspec import NoSuchKernel
 from jupyter_client.multikernelmanager import MultiKernelManager
 from jupyter_client.threaded import ThreadedKernelClient, ThreadedZMQSocketChannel
+from jupyter_core.paths import jupyter_data_dir
 from tornado import gen
 from traitlets.traitlets import Bool, Type
 
@@ -20,8 +26,12 @@ if typing.TYPE_CHECKING:
     from jupyter_client import KernelClient, KernelManager
 
 LOG = logging.getLogger(__name__)
+HYDRA_DATA_DIR = os.path.join(jupyter_data_dir(), "hydra-kernel")
+
+pathlib.Path(HYDRA_DATA_DIR).mkdir(exist_ok=True)
 
 __version__ = "0.0.1"
+
 
 # Do some subclassing to ensure we are spawning threaded clients
 # for our proxy kernels (the default is blocking.)
@@ -70,8 +80,13 @@ class HydraKernelManager(IOLoopKernelManager):
         except NoSuchKernel:
             self.kernel_spec_manager.install_kernel_spec(None, kernel_name=self.kernel_name)
 
-        # A side effect of writing the connection file is random port selection.
-        self.write_connection_file()
+        # Actually start the kernel on the remote, it will return the pid
+        code, stdout, stderr = self._binding.exec(
+            f"hydra spawn {shlex.quote(self.id)} {shlex.quote(self.kernel_name)}"
+        )
+        res = json.load(stdout)
+        # pid, connection
+        self.load_connection_info(res["connection"])
 
         if self.needs_tunnel:
             conn = self._binding.connection
@@ -91,6 +106,10 @@ class HydraKernelManager(IOLoopKernelManager):
 class HydraMultiKernelManager(MultiKernelManager):
     kernel_manager_class = "hydra_kernel.kernel.HydraKernelManager"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.connection_dir = HYDRA_DATA_DIR
+
     def pre_start_kernel(self, kernel_name, kwargs):
         (
             km,
@@ -98,6 +117,7 @@ class HydraMultiKernelManager(MultiKernelManager):
             kernel_id
         ) = super().pre_start_kernel(kernel_name, kwargs)
         km.init_binding(kwargs.pop("binding"))
+        km.id = kernel_id
         return km, kernel_name, kernel_id
 
 

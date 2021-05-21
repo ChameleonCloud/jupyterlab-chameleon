@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import logging
 import os
 import sys
+import tempfile
 
 import ansible_runner
-from jupyter_client.kernelspec import KernelSpecManager
+from jupyter_client.kernelspec import KernelSpecManager, NoSuchKernel
+import paramiko
 from traitlets.traitlets import Instance
 
 from hydra_kernel.binding import Binding
@@ -34,15 +37,33 @@ class RemoteKernelSpecManager(KernelSpecManager):
     To look up kernels, the manager connects via SSH to the host and inspects
     the default directories where kernelspecs are installed.
     """
-    binding = Instance(Binding)
+    binding: "Binding" = Instance(Binding)
 
     def find_kernel_specs(self):
         if self.binding.is_loopback:
             return super().find_kernel_specs()
 
         LOG.debug("find_kernel_specs")
-        self.binding.exec("ls -al /etc")
-        return {}
+
+        kernelspecs = {}
+        try:
+            code, stdout, stderr = self.binding.exec(
+                "python -m jupyter_core kernelspec list --json"
+            )
+            if code == 0:
+                kernelspecs = json.loads(stdout.read())["kernelspecs"]
+            else:
+                LOG.warn((
+                    f"Failed to list kernel specs on {self.binding.name}: "
+                    f"{stderr.read()}"
+                ))
+        except json.JSONDecodeError:
+            pass
+
+        return {
+            name: spec["resource_dir"]
+            for name, spec in kernelspecs.items()
+        }
 
     def remove_kernel_spec(self, name):
         if self.binding.is_loopback:
@@ -52,40 +73,42 @@ class RemoteKernelSpecManager(KernelSpecManager):
         if self.binding.is_loopback:
             return super().get_kernel_spec(kernel_name)
 
-        LOG.debug(f"get_kernel_spec: {kernel_name}")
-        with self.binding.get_file("/etc/resolv.conf") as f:
-            LOG.debug(f.read().decode("utf-8"))
-        # TODO: this really needs to look up the paths on the host directly.
-        # For now, we assume kernels are installed in /etc/jupyter or
-        # /usr/local/share/jupyter
-        # dirs = jupyter_path("kernels")
-        return super().get_kernel_spec(kernel_name)
+        resource_dir = self.find_kernel_specs().get(kernel_name)
+        if not resource_dir:
+            raise NoSuchKernel(kernel_name)
+
+        with self.binding.get_file(os.path.join(resource_dir, "kernel.json")) as f:
+            return self.kernel_spec_class(
+                resource_dir=resource_dir,
+                **json.load(f)
+            )
 
     def install_kernel_spec(self, source_dir, kernel_name, **kwargs):
         if self.binding.is_loopback:
             return super().install_kernel_spec(source_dir, kernel_name=kernel_name, **kwargs)
 
         LOG.debug(f"install_kernel_spec: {kernel_name}")
-        data_dir = os.path.join(sys.prefix, "share", "hydra-kernel")
+        ansible_dir = os.path.join(sys.prefix, "share", "hydra-kernel", "ansible")
         host_vars = self._host_vars()
 
-        ansible_runner.run(
-            private_data_dir=data_dir,
-            project_dir="ansible",
-            inventory={
-                "all": {
-                    "hosts": {
-                        "KERNEL": host_vars
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ansible_runner.run(
+                private_data_dir=tmpdir,
+                project_dir=ansible_dir,
+                inventory={
+                    "all": {
+                        "hosts": {
+                            "KERNEL": host_vars
+                        }
                     }
-                }
-            },
-            playbook="kernel_action.yml",
-            extravars={
-                "kernel_name": kernel_name,
-                "kernel_action": "start"
-            },
-            event_handler=self._on_ansible_event,
-        )
+                },
+                playbook="kernel_action.yml",
+                extravars={
+                    "kernel_name": kernel_name,
+                    "kernel_action": "install",
+                },
+                event_handler=self._on_ansible_event,
+            )
 
     def _host_vars(self):
         conn = self.binding.connection
