@@ -12,4 +12,4 @@ publish:
 
 .PHONY: watch
 watch:
-	jlpm watch:src
+	jlpm watch

@@ -1,6 +1,7 @@
 import logging
 import os
 import pathlib
+from re import I
 import shlex
 from signal import SIGKILL
 import subprocess
@@ -115,8 +116,10 @@ class HydraKernelManager(IOLoopKernelManager):
             sshserver = f"{conn.get('user')}@{conn['host']}"
 
             if not self.host_key_checking:
-                hosts_file_path = os.path.join(pathlib.Path.home(), ".ssh", "known_hosts")
-                with open(hosts_file_path, "a") as hosts_file:
+                hosts_file_path = pathlib.Path(pathlib.Path.home(), ".ssh", "known_hosts")
+                hosts_file_path.parent.mkdir(exist_ok=True)
+                hosts_file_path.touch()
+                with hosts_file_path.open("a") as hosts_file:
                     proc = subprocess.run(
                         shlex.split(f"ssh-keyscan -H {conn['host']}"),
                         stdout=hosts_file

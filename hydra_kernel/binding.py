@@ -41,6 +41,7 @@ class Binding(HasTraits):
     @property
     def is_local(self):
         try:
+            LOG.info(f"Checking if {self.connection['host']} is local")
             return ipaddress.IPv4Address(self.connection["host"]).is_loopback
         except ipaddress.AddressValueError:
             return False
@@ -76,13 +77,17 @@ class Binding(HasTraits):
         if isinstance(command, str):
             command = shlex.split(command)
         if self.is_local:
-            process = subprocess.run(
-                [shlex.quote(s) for s in command],
-                capture_output=True,
-                timeout=timeout
-            )
-            LOG.info(process)
-            return process.returncode, process.stdout, process.stderr
+            LOG.info(f"Spawning local process: {command}")
+            with tempfile.TemporaryFile() as tmpf:
+                process = subprocess.run(
+                    [shlex.quote(s) for s in command],
+                    stdout=tmpf,
+                    stderr=tmpf,
+                    timeout=timeout,
+                )
+                tmpf.seek(0)
+                return process.returncode, io.BytesIO(tmpf.read()), io.BytesIO()
+        LOG.info("Spawning remote process")
         with self._ssh_connect() as ssh:
             _, stdout, stderr = ssh.exec_command(shlex.join(command), timeout=timeout)
             return stdout.channel.recv_exit_status(), stdout, stderr

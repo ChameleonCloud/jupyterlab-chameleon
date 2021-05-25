@@ -10,8 +10,10 @@ import { INotebookModel, NotebookPanel } from '@jupyterlab/notebook';
 import {
   IObservableJSON,
   IObservableList,
-  IObservableMap
+  IObservableMap,
+  ObservableList
 } from '@jupyterlab/observables';
+import { findIndex } from '@lumino/algorithm';
 import { KernelMessage } from '@jupyterlab/services';
 import {
   IComm,
@@ -85,6 +87,8 @@ export class CellMetadata implements ICellMetadata, IDisposable {
  */
 export class CodeCellExtension
   implements DocumentRegistry.IWidgetExtension<NotebookPanel, INotebookModel> {
+  bindings: IObservableList<IBindingModel> = new ObservableList();
+
   /**
    * Create a new extension object.
    */
@@ -92,13 +96,9 @@ export class CodeCellExtension
     panel: NotebookPanel,
     context: DocumentRegistry.IContext<INotebookModel>
   ): IDisposable {
-    const bindingProvider = () => {
-      return this._bindings;
-    };
-
     const switcher = new CellBindingSwitcher(
       panel.content,
-      bindingProvider,
+      this.bindings,
       this._cellMetadata
     );
     panel.toolbar.insertBefore('spacer', 'changeBinding', switcher);
@@ -107,27 +107,60 @@ export class CodeCellExtension
       switcher.setHidden(!!cell && cell.model.type !== 'code');
     });
 
-    const onCellsChanged = this._cellChangeCallback(panel, bindingProvider);
+    const onCellsChanged = this._cellChangeCallback(panel);
     panel.model.cells.changed.connect(onCellsChanged);
 
     const onKernelChanged = this._kernelChangeCallback();
     panel.sessionContext.kernelChanged.connect(onKernelChanged);
 
+    const onBindingsChanged = this._bindingsChangedCallback(panel);
+    this.bindings.changed.connect(onBindingsChanged);
+
     return new DisposableDelegate(() => {
       panel.model.cells.changed.disconnect(onCellsChanged);
       panel.sessionContext.kernelChanged.disconnect(onKernelChanged);
+      this.bindings.changed.disconnect(onBindingsChanged);
       this._cellMetadata.dispose();
+      this.bindings.dispose();
       switcher.dispose();
     });
+  }
+
+  private _bindingsChangedCallback(panel: NotebookPanel) {
+    return (
+      bindings: IObservableList<IBindingModel>,
+      change: IObservableList.IChangedArgs<IBindingModel>
+    ) => {
+      panel.content.widgets.forEach(cellWidget => {
+        if (cellWidget.model.type === 'code') {
+          Private.updateCellDisplay(cellWidget, this._cellMetadata, bindings);
+        }
+      });
+    };
   }
 
   private _onCommMsg(message: KernelMessage.ICommMsgMsg) {
     const data = message?.content?.data;
     console.log('Got message: ', data);
     const { event } = data || {};
+    let binding: IBindingModel = null;
+    let bindingIndex = -1;
     switch (event) {
       case 'binding_list_reply':
-        this._bindings = (data.bindings as unknown) as IBindingModel[];
+        this.bindings.clear();
+        this.bindings.pushAll((data.bindings as unknown) as IBindingModel[]);
+        break;
+      case 'binding_update':
+        binding = (data.binding as unknown) as IBindingModel;
+        bindingIndex = findIndex(
+          this.bindings.iter(),
+          ({ name }, _) => name === binding.name
+        );
+        if (bindingIndex > -1) {
+          this.bindings.set(bindingIndex, binding);
+        } else {
+          this.bindings.push(binding);
+        }
         break;
       default:
         break;
@@ -156,10 +189,7 @@ export class CodeCellExtension
     };
   }
 
-  private _cellChangeCallback(
-    panel: NotebookPanel,
-    bindingProvider: () => IBindingModel[]
-  ) {
+  private _cellChangeCallback(panel: NotebookPanel) {
     return (
       cells: IObservableList<ICellModel>,
       changed: IObservableList.IChangedArgs<ICellModel>
@@ -177,21 +207,26 @@ export class CodeCellExtension
               changed.newIndex > 0 &&
               !this._cellMetadata.hasBinding(cellModel)
             ) {
-              // Copy cell binding from previous cell
+              // Automatically seed new cells w/ the prior binding.
               const previousCell = cells.get(changed.newIndex - 1);
-              this._cellMetadata.setBindingName(
-                cellModel,
-                this._cellMetadata.getBindingName(previousCell)
+              const previousBinding = this._cellMetadata.getBindingName(
+                previousCell
               );
+              if (previousBinding) {
+                this._cellMetadata.setBindingName(cellModel, previousBinding);
+              }
             }
 
-            const bindings = bindingProvider();
-            Private.updateCellDisplay(cellWidget, this._cellMetadata, bindings);
+            Private.updateCellDisplay(
+              cellWidget,
+              this._cellMetadata,
+              this.bindings
+            );
             this._cellMetadata.onBindingNameChanged(cellModel, () => {
               Private.updateCellDisplay(
                 cellWidget,
                 this._cellMetadata,
-                bindings
+                this.bindings
               );
             });
           }
@@ -202,7 +237,6 @@ export class CodeCellExtension
     };
   }
 
-  private _bindings: IBindingModel[] = [];
   private _comm: IComm;
   private _cellMetadata: CellMetadata = new CellMetadata();
 }
@@ -227,15 +261,19 @@ namespace Private {
   export function updateCellDisplay(
     widget: Cell,
     cellMeta: ICellMetadata,
-    bindings: IBindingModel[]
+    bindings: IObservableList<IBindingModel>
   ): void {
     const cellBindingName = cellMeta.getBindingName(widget.model);
-    const indexOf = bindings.findIndex(({ name }) => name === cellBindingName);
+
+    const indexOf = findIndex(
+      bindings.iter(),
+      ({ name }, _) => name === cellBindingName
+    );
 
     CELL_CLASSES.forEach(cls => widget.removeClass(cls));
 
     if (indexOf > -1) {
-      widget.addClass(CELL_CLASSES[indexOf]);
+      widget.addClass(CELL_CLASSES[indexOf % CELL_CLASSES.length]);
     }
   }
 }
