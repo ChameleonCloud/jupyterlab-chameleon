@@ -1,20 +1,26 @@
 from contextlib import contextmanager
 import io
 import ipaddress
+import json
 import logging
+import os
+from re import L
+import shlex
+import subprocess
 import tempfile
 import typing
 
 from paramiko.client import AutoAddPolicy, SSHClient
 from paramiko.ssh_exception import SSHException
 from scp import SCPClient
-from traitlets.traitlets import Enum, HasTraits, Dict, Unicode
+from traitlets.traitlets import Enum, HasTraits, Dict, Unicode, observe
 
 if typing.TYPE_CHECKING:
     from paramiko.channel import ChannelFile, ChannelStderrFile
 
 LOG = logging.getLogger(__name__)
 
+DEFAULT_SSH_TIMEOUT = 10
 DEFAULT_KERNEL = 'bash'
 SUPPORTED_KERNELS = (
     'bash', 'python'
@@ -25,12 +31,28 @@ class Binding(HasTraits):
     kernel = Enum(SUPPORTED_KERNELS, default_value=DEFAULT_KERNEL)
     connection = Dict()
 
+    _virtualenv = None
+
+    @observe("connection")
+    def _on_connection_change(self, change):
+        # Invalidate cached values
+        self._virtualenv = None
+
     @property
-    def is_loopback(self):
+    def is_local(self):
         try:
             return ipaddress.IPv4Address(self.connection["host"]).is_loopback
         except ipaddress.AddressValueError:
             return False
+
+    @property
+    def virtualenv(self):
+        if self.is_local:
+            return None
+        if self._virtualenv is None:
+            paths = self.exec_json("jupyter --paths --json")
+            self._virtualenv = os.path.join(paths["data"][0], "hydra-kernel", "venv")
+        return self._virtualenv
 
     def as_dict(self):
         return {
@@ -46,20 +68,36 @@ class Binding(HasTraits):
             self.connection["host"],
             username=self.connection.get("user"),
             key_filename=self.connection.get("ssh_private_key_file"),
+            timeout=self.connection.get("ssh_timeout", DEFAULT_SSH_TIMEOUT),
         )
         return client
 
-    def exec(self, command: "str", timeout=None) -> "tuple[int,ChannelFile,ChannelStderrFile]":
+    def exec(self, command: "typing.Union[list,str]", timeout=None) -> "tuple[int,ChannelFile,ChannelStderrFile]":
+        if isinstance(command, str):
+            command = shlex.split(command)
+        if self.is_local:
+            process = subprocess.run(
+                [shlex.quote(s) for s in command],
+                capture_output=True,
+                timeout=timeout
+            )
+            LOG.info(process)
+            return process.returncode, process.stdout, process.stderr
         with self._ssh_connect() as ssh:
-            _, stdout, stderr = ssh.exec_command(command, timeout=timeout)
+            _, stdout, stderr = ssh.exec_command(shlex.join(command), timeout=timeout)
             return stdout.channel.recv_exit_status(), stdout, stderr
+
+    def exec_json(self, command: "str", timeout=None) -> "typing.Union[dict,list]":
+        code, stdout, stderr = self.exec(command, timeout=timeout)
+        if code > 0:
+            raise RuntimeError(stderr.read())
+        return json.load(stdout)
 
     @contextmanager
     def get_file(self, path: "str") -> "io.BytesIO":
         with self._ssh_connect() as ssh:
             scp = SCPClient(ssh.get_transport())
             with tempfile.NamedTemporaryFile() as tmpf:
-                LOG.debug(f"{path} -> {tmpf.name}")
                 scp.get(path, tmpf.name)
                 tmpf.seek(0)
                 yield tmpf

@@ -14,8 +14,9 @@
 # limitations under the License.
 
 import argparse
+import json
 import os
-from re import L
+from pathlib import Path
 import shlex
 import subprocess
 import sys
@@ -34,12 +35,14 @@ parser.set_defaults(log_to_file=True)
 args = parser.parse_args(sys.argv[1:])
 
 runtime_dir = jupyter_runtime_dir()
+Path(runtime_dir).mkdir(exist_ok=True)
+
 connection_file = os.path.join(runtime_dir, f"kernel-{args.id}.json")
 log_file = os.path.join(runtime_dir, f"kernel-{args.id}.log")
 
-cmd_str = f"{args.launcher} --kernel {args.kernel} --KernelManager.connection_file {connection_file}"
+cmd_str = f"{args.launcher} --kernel={args.kernel} --KernelManager.connection_file={connection_file}"
 if args.log_to_file:
-    cmd_str += f" --log-file {log_file}"
+    cmd_str += f" --log-file={log_file}"
 kernel = subprocess.Popen(
     shlex.split(cmd_str),
     stderr=subprocess.STDOUT,
@@ -58,6 +61,8 @@ while not os.path.exists(connection_file):
         raise TimeoutError(msg)
     time.sleep(0.1)
 
-print(kernel.pid)
+subkernel = {"pid": kernel.pid}
 with open(connection_file, "r") as f:
-    print(f.read())
+    subkernel["connection"] = json.load(f)
+
+print(json.dumps(subkernel))

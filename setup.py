@@ -47,7 +47,9 @@ data_files_spec = [
     # where extensions aren't being properly enabled on install.
     ("etc/jupyter/jupyter_notebook_config.d",
      "jupyter-config", "jupyterlab-chameleon.json"),
+    # Hydra kernel
     ("share/hydra-kernel/ansible", "ansible", "**"),
+    ("bin", "ansible/files/bin", "*"),
 ]
 
 cmdclass = create_cmdclass("jsdeps",

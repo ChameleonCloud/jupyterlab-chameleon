@@ -1,9 +1,9 @@
-import json
 import logging
 import os
 import pathlib
-from re import I
 import shlex
+from signal import SIGKILL
+import subprocess
 import time
 import typing
 
@@ -61,46 +61,116 @@ class HydraKernelManager(IOLoopKernelManager):
 
     tunnel = Bool(True, help=(
         "If set, connection to remote kernel will be established over an SSH "
-        "tunnel. Remote kernels on loopback hosts will not have tunnels."))
+        "tunnel. Remote kernels on loopback hosts will not have tunnels."
+    ))
+
+    host_key_checking = Bool(False, help=(
+        "If set, remote connections to hosts that do not have an entry in the "
+        "system host key list will raise an error."
+    ))
 
     _binding: Binding = None
 
     @property
     def needs_tunnel(self):
-        return self.tunnel and not self._binding.is_loopback
+        return self.tunnel and not self._binding.is_local
 
-    def init_binding(self, binding: Binding):
+    def init_binding(self, kernel_id, binding: Binding):
         self._binding = binding
+        self.kernel_id = kernel_id
         self.kernel_spec_manager = RemoteKernelSpecManager(binding=binding)
 
     def pre_start_kernel(self, **kw):
-        LOG.debug(f"Looking for kernel in {self.kernel_spec_manager}")
         try:
             self.kernel_spec_manager.get_kernel_spec(self.kernel_name)
         except NoSuchKernel:
+            LOG.info(f"No kernel found for '{self.kernel_name}', attempting install")
             self.kernel_spec_manager.install_kernel_spec(None, kernel_name=self.kernel_name)
+        return super().pre_start_kernel(**kw)
 
-        # Actually start the kernel on the remote, it will return the pid
-        code, stdout, stderr = self._binding.exec(
-            f"hydra spawn {shlex.quote(self.id)} {shlex.quote(self.kernel_name)}"
-        )
-        res = json.load(stdout)
-        # pid, connection
-        self.load_connection_info(res["connection"])
+    def format_kernel_cmd(self, extra_arguments):
+        cmd = super().format_kernel_cmd(extra_arguments=extra_arguments)
+        cmd.append(f"--id={self.kernel_id}")
+        if self._binding.virtualenv:
+            venv_bin = os.path.join(self._binding.virtualenv, "bin")
+            cmd[0] = os.path.join(venv_bin, cmd[0])
+            cmd.append(f"--launcher={os.path.join(venv_bin, 'hydra-subkernel')}")
+
+        return cmd
+
+    def _launch_kernel(self, kernel_cmd, **kw):
+        # Forget any random port assignments done in default pre_start_kernel
+        self.cleanup_random_ports()
+
+        LOG.info(f"Launching kernel for {self._binding.name}: {kernel_cmd}")
+
+        subkernel = self._binding.exec_json(kernel_cmd)
+        conn_info = subkernel["connection"]
+        self.load_connection_info(conn_info)
+        LOG.info(conn_info)
 
         if self.needs_tunnel:
             conn = self._binding.connection
             sshkey = conn.get("ssh_private_key_file")
-            sshserver = f"{conn.get('user')}@{conn.get('host')}"
+            sshserver = f"{conn.get('user')}@{conn['host']}"
+
+            if not self.host_key_checking:
+                hosts_file_path = os.path.join(pathlib.Path.home(), ".ssh", "known_hosts")
+                with open(hosts_file_path, "a") as hosts_file:
+                    proc = subprocess.run(
+                        shlex.split(f"ssh-keyscan -H {conn['host']}"),
+                        stdout=hosts_file
+                    )
+                    if proc.returncode != 0:
+                        LOG.warning((
+                            f"Failed to update host key for {conn['host']}: "
+                            f"{proc.stderr.read()}"
+                        ))
+
+            LOG.info(f"Opening SSH tunnel to {sshserver}")
+
             (
                 self.shell_port,
                 self.iopub_port,
                 self.stdin_port,
                 self.hb_port,
                 self.control_port
-            ) = tunnel_to_kernel(self.get_connection_info(), sshserver, sshkey=sshkey)
+            ) = tunnel_to_kernel(conn_info, sshserver, sshkey=sshkey)
 
-        return super().pre_start_kernel(**kw)
+        self.write_connection_file()
+
+        return ProcessProxy(self._binding, subkernel["pid"])
+
+
+class ProcessProxy(object):
+    def __init__(self, binding, pid):
+        self.binding = binding
+        self.pid = pid
+
+    def poll(self):
+        try:
+            if self.send_signal(0) != 0:
+                return 0
+        except ConnectionError:
+            LOG.warning(f"Connection error when polling subkernel {self.binding}")
+            # TODO: communicate this up to the client somehow?
+        return None
+
+    def wait(self, timeout=10):
+        start = time.perf_counter()
+        while True:
+            if self.poll() is not None:
+                return
+            if time.perf_counter() - start > timeout:
+                return
+            time.sleep(1)
+
+    def send_signal(self, signum):
+        code, _, _ = self.binding.exec(f"kill -{signum} {self.pid}")
+        return code
+
+    def kill(self):
+        return self.send_signal(SIGKILL)
 
 
 class HydraMultiKernelManager(MultiKernelManager):
@@ -116,8 +186,7 @@ class HydraMultiKernelManager(MultiKernelManager):
             kernel_name,
             kernel_id
         ) = super().pre_start_kernel(kernel_name, kwargs)
-        km.init_binding(kwargs.pop("binding"))
-        km.id = kernel_id
+        km.init_binding(kernel_id, kwargs.pop("binding"))
         return km, kernel_name, kernel_id
 
 
@@ -225,6 +294,15 @@ class HydraKernel(IPythonKernel):
         LOG.debug("Registering comm channel")
         self.comm_manager.register_target("banana", self.register_banana)
 
+    def do_shutdown(self, restart):
+        # Also shut down all managed subkernels
+        for kernel_id in self.kernel_manager.list_kernel_ids():
+            LOG.info(f"Shutting down subkernel {kernel_id}")
+            kernel: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
+            kernel.shutdown_kernel(restart=restart)
+
+        return super().do_shutdown(restart)
+
     def register_banana(self, comm: "Comm", message: "dict"):
         if self._comm:
             self._comm.on_msg(None)
@@ -241,7 +319,7 @@ class HydraKernel(IPythonKernel):
 
     def on_comm_msg(self, message: "dict"):
         payload = message.get("content", {}).get("data", {})
-        LOG.debug(f"Got message: {payload}")
+        LOG.info(f"Got message: {payload}")
         if payload["event"] == "binding_list_request":
             if self._comm:
                 self._comm.send({
@@ -268,7 +346,7 @@ class HydraKernel(IPythonKernel):
 
         # Check if binding name is valid (is there a binding set up?)
         if binding_name not in self._kernels:
-            self.log.debug("Creating sub-kernel for %s", binding_name)
+            self.log.info(f"Creating sub-kernel for '{binding_name}'")
             binding = self.binding_manager.get(binding_name)
             self._kernels[binding_name] = spawn_kernel(
                 self.kernel_manager,
@@ -279,7 +357,7 @@ class HydraKernel(IPythonKernel):
 
         # TODO: add parent in here?
         msg = kc.session.msg("execute_request", content)
-        self.log.debug("%s", msg)
+        self.log.debug(str(msg))
 
         proxy = ProxyComms(self.session, parent, self.iopub_socket, self.shell_streams)
 

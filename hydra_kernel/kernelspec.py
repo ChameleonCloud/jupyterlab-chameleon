@@ -20,7 +20,6 @@ import tempfile
 
 import ansible_runner
 from jupyter_client.kernelspec import KernelSpecManager, NoSuchKernel
-import paramiko
 from traitlets.traitlets import Instance
 
 from hydra_kernel.binding import Binding
@@ -39,26 +38,29 @@ class RemoteKernelSpecManager(KernelSpecManager):
     """
     binding: "Binding" = Instance(Binding)
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._kernelspecs = None
+        if self.binding:
+            self.binding.observe(self._on_connection_changed, "connection")
+
+    def _on_connection_changed(self, change):
+        self._kernelspecs = None
+
     def find_kernel_specs(self):
-        if self.binding.is_loopback:
+        if self.binding.is_local:
             return super().find_kernel_specs()
 
-        LOG.debug("find_kernel_specs")
-
-        kernelspecs = {}
-        try:
-            code, stdout, stderr = self.binding.exec(
-                "python -m jupyter_core kernelspec list --json"
-            )
-            if code == 0:
-                kernelspecs = json.loads(stdout.read())["kernelspecs"]
-            else:
+        if not self._kernelspecs:
+            LOG.info(f"Fetching all kernel specs for '{self.binding.name}'")
+            try:
+                self._kernelspecs = self.binding.exec_json("jupyter kernelspec list --json")["kernelspecs"]
+            except RuntimeError as exc:
                 LOG.warn((
-                    f"Failed to list kernel specs on {self.binding.name}: "
-                    f"{stderr.read()}"
+                    f"Failed to list kernel specs on {self.binding.name}: {exc}"
                 ))
-        except json.JSONDecodeError:
-            pass
+
+        kernelspecs = self._kernelspecs or {}
 
         return {
             name: spec["resource_dir"]
@@ -66,28 +68,28 @@ class RemoteKernelSpecManager(KernelSpecManager):
         }
 
     def remove_kernel_spec(self, name):
-        if self.binding.is_loopback:
+        if self.binding.is_local:
             return super().remove_kernel_spec(name)
+        else:
+            raise NotImplementedError("Removing remote specs not yet supported")
 
     def get_kernel_spec(self, kernel_name):
-        if self.binding.is_loopback:
-            return super().get_kernel_spec(kernel_name)
+        if self.binding.is_local:
+            spec = super().get_kernel_spec(kernel_name)
+        else:
+            resource_dir = self.find_kernel_specs().get(kernel_name)
+            if not resource_dir:
+                raise NoSuchKernel(kernel_name)
 
-        resource_dir = self.find_kernel_specs().get(kernel_name)
-        if not resource_dir:
-            raise NoSuchKernel(kernel_name)
+            with self.binding.get_file(os.path.join(resource_dir, "kernel.json")) as f:
+                spec_info = json.load(f)
+                LOG.info(f"Loaded {kernel_name} spec for {self.binding.name}: {spec_info}")
+                spec = self.kernel_spec_class(resource_dir=resource_dir, **spec_info)
 
-        with self.binding.get_file(os.path.join(resource_dir, "kernel.json")) as f:
-            return self.kernel_spec_class(
-                resource_dir=resource_dir,
-                **json.load(f)
-            )
+        spec.argv = ["hydra-agent", f"--kernel={kernel_name}"]
+        return spec
 
     def install_kernel_spec(self, source_dir, kernel_name, **kwargs):
-        if self.binding.is_loopback:
-            return super().install_kernel_spec(source_dir, kernel_name=kernel_name, **kwargs)
-
-        LOG.debug(f"install_kernel_spec: {kernel_name}")
         ansible_dir = os.path.join(sys.prefix, "share", "hydra-kernel", "ansible")
         host_vars = self._host_vars()
 
@@ -120,7 +122,7 @@ class RemoteKernelSpecManager(KernelSpecManager):
             "ansible_ssh_private_key_file": conn.get("ssh_private_key_file"),
             # TODO: handle "via"
         }
-        if self.binding.is_loopback:
+        if self.binding.is_local:
             host_vars["ansible_connection"] = "local"
         return host_vars
 
