@@ -10,10 +10,10 @@ import subprocess
 import tempfile
 import typing
 
-from paramiko.client import AutoAddPolicy, SSHClient
+from paramiko.client import AutoAddPolicy, RejectPolicy, SSHClient
 from paramiko.ssh_exception import SSHException
 from scp import SCPClient
-from traitlets.traitlets import Enum, HasTraits, Dict, Unicode, observe
+from traitlets.traitlets import Bool, Enum, HasTraits, Dict, Unicode, observe
 
 if typing.TYPE_CHECKING:
     from paramiko.channel import ChannelFile, ChannelStderrFile
@@ -31,6 +31,11 @@ class Binding(HasTraits):
     kernel = Enum(SUPPORTED_KERNELS, default_value=DEFAULT_KERNEL)
     connection = Dict()
 
+    host_key_checking = Bool(False, help=(
+        "If set, remote connections to hosts that do not have an entry in the "
+        "system host key list will raise an error."
+    ))
+
     _virtualenv = None
 
     @observe("connection")
@@ -41,7 +46,6 @@ class Binding(HasTraits):
     @property
     def is_local(self):
         try:
-            LOG.info(f"Checking if {self.connection['host']} is local")
             return ipaddress.IPv4Address(self.connection["host"]).is_loopback
         except ipaddress.AddressValueError:
             return False
@@ -63,8 +67,9 @@ class Binding(HasTraits):
 
     def _ssh_connect(self) -> "SSHClient":
         client = SSHClient()
-        # TODO: allow configuring host key checking
-        client.set_missing_host_key_policy(AutoAddPolicy)
+        client.set_missing_host_key_policy(
+            RejectPolicy if self.host_key_checking else AutoAddPolicy
+        )
         client.connect(
             self.connection["host"],
             username=self.connection.get("user"),
@@ -73,11 +78,30 @@ class Binding(HasTraits):
         )
         return client
 
-    def exec(self, command: "typing.Union[list,str]", timeout=None) -> "tuple[int,ChannelFile,ChannelStderrFile]":
+    def exec(self, command: "typing.Union[list,str]", timeout=None) -> "tuple[int,io.RawIOBase,io.RawIOBase]":
+        """Execute a command on the binding host.
+
+        If the binding is a local binding, the command is executed directly, via
+        `subprocess.run`. If a remote binding, the command is executed via
+        a SSH session.
+
+        Args:
+            command (Union[list,str]): the command to run. This can either be
+                passed as a list of command arguments, or as a command string.
+            timeout (int): how long to wait before terminating the command.
+                Defaults to None, meaning no timeout.
+
+        Returns:
+            tuple[int,RawIOBase,RawIOBase]: a tuple of the return code, and
+                an IO stream for captured stdout and stderr, respectively.
+        """
         if isinstance(command, str):
             command = shlex.split(command)
         if self.is_local:
-            LOG.info(f"Spawning local process: {command}")
+            # In a kernel context, the STDOUT and STDERR file descriptors are
+            # already piped to the iopub channel. Using `capture_output` will
+            # pipe those fds again, which ends up deadlocking subprocess.run.
+            # Instead, pipe both stdout and stderr to a temporary file.
             with tempfile.TemporaryFile() as tmpf:
                 process = subprocess.run(
                     [shlex.quote(s) for s in command],
@@ -85,9 +109,9 @@ class Binding(HasTraits):
                     stderr=tmpf,
                     timeout=timeout,
                 )
+                # Reset stream for reading
                 tmpf.seek(0)
                 return process.returncode, io.BytesIO(tmpf.read()), io.BytesIO()
-        LOG.info("Spawning remote process")
         with self._ssh_connect() as ssh:
             _, stdout, stderr = ssh.exec_command(shlex.join(command), timeout=timeout)
             return stdout.channel.recv_exit_status(), stdout, stderr
