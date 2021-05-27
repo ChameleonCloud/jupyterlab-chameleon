@@ -8,7 +8,11 @@ import { ISessionContext } from '@jupyterlab/apputils';
 import { Cell, ICellModel } from '@jupyterlab/cells';
 import { IChangedArgs } from '@jupyterlab/coreutils';
 import { DocumentRegistry } from '@jupyterlab/docregistry';
-import { INotebookModel, NotebookPanel } from '@jupyterlab/notebook';
+import {
+  INotebookModel,
+  INotebookTracker,
+  NotebookPanel
+} from '@jupyterlab/notebook';
 import { IObservableList } from '@jupyterlab/observables';
 import { IKernelConnection } from '@jupyterlab/services/lib/kernel/kernel';
 import { ITranslator } from '@jupyterlab/translation';
@@ -29,7 +33,11 @@ const CELL_CLASSES = [...Array(10).keys()].map(n => `chi-binding-${n}`);
  */
 export class HydraNotebookExtension
   implements DocumentRegistry.IWidgetExtension<NotebookPanel, INotebookModel> {
-  registry: IBindingRegistry = new BindingRegistry();
+  registry: IBindingRegistry;
+
+  constructor(bindingRegistry: IBindingRegistry) {
+    this.registry = bindingRegistry;
+  }
 
   /**
    * Create a new extension object.
@@ -66,9 +74,13 @@ export class HydraNotebookExtension
     ) => {
       if (bindings) {
         bindings.changed.disconnect(onBindingsChanged);
+        bindings = null;
       }
-      bindings = this.registry.register(changed.newValue);
-      bindings.changed.connect(onBindingsChanged);
+      const kernel = changed.newValue;
+      if (kernel) {
+        bindings = this.registry.register(changed.newValue);
+        bindings.changed.connect(onBindingsChanged);
+      }
     };
 
     const onCellsChanged = (
@@ -117,14 +129,15 @@ export class HydraNotebookExtension
 }
 
 const plugin: JupyterFrontEndPlugin<void> = {
-  activate(app: JupyterFrontEnd) {
+  id: '@chameleoncloud/jupyterlab-chameleon:hydra-notebook',
+  autoStart: true,
+  requires: [IBindingRegistry],
+  activate(app: JupyterFrontEnd, bindingRegistry: IBindingRegistry) {
     app.docRegistry.addWidgetExtension(
       'Notebook',
-      new HydraNotebookExtension()
+      new HydraNotebookExtension(bindingRegistry)
     );
-  },
-  id: '@chameleoncloud/jupyterlab-chameleon:codeCellPlugin',
-  autoStart: true
+  }
 };
 
 namespace Private {
@@ -158,19 +171,35 @@ namespace Private {
   }
 }
 
+const bindingRegistryPlugin: JupyterFrontEndPlugin<IBindingRegistry> = {
+  id: '@chameleoncloud/jupyterlab-chameleon:binding-registry',
+  autoStart: true,
+  provides: IBindingRegistry,
+  activate() {
+    return new BindingRegistry();
+  }
+};
+
 const statusPlugin: JupyterFrontEndPlugin<void> = {
   id: '@chameleoncloud/jupyterlab-chameleon:hydra-bindings',
   autoStart: true,
-  requires: [ILabShell, ITranslator],
+  requires: [ILabShell, INotebookTracker, IBindingRegistry, ITranslator],
   optional: [ILayoutRestorer],
   activate: (
     app: JupyterFrontEnd,
     labshell: ILabShell,
+    notebookTracker: INotebookTracker,
+    bindingRegistry: IBindingRegistry,
     translator: ITranslator,
     restorer: ILayoutRestorer | null
   ) => {
     const trans = translator.load('jupyterlab');
-    const widget = new BindingStatusPanel(labshell, undefined, translator);
+    const widget = new BindingStatusPanel(
+      labshell,
+      notebookTracker,
+      bindingRegistry,
+      translator
+    );
     widget.title.icon = offlineBoltIcon;
     widget.title.caption = trans.__('Hydra Bindings');
     widget.id = 'chi-hydra-bindings';
@@ -181,4 +210,4 @@ const statusPlugin: JupyterFrontEndPlugin<void> = {
   }
 };
 
-export default [plugin, statusPlugin];
+export default [plugin, bindingRegistryPlugin, statusPlugin];

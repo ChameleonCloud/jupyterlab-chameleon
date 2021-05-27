@@ -78,6 +78,14 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
     this._bindings.delete(kernel);
   }
 
+  getBindings(kernel: IKernelConnection): IObservableList<IBindingModel> {
+    if (!this._bindings.has(kernel)) {
+      throw new Error('Kernel not registered');
+    }
+
+    return this._bindings.get(kernel).bindings;
+  }
+
   private _findTrackerByCommId(commId: string): Private.BindingTracker {
     for (const tracker of this._bindings.values()) {
       if (tracker.comm?.commId === commId) {
