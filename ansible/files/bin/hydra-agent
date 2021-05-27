@@ -34,11 +34,39 @@ parser.add_argument("--no-log-file", dest="log_to_file", action="store_false")
 parser.set_defaults(log_to_file=True)
 args = parser.parse_args(sys.argv[1:])
 
-runtime_dir = jupyter_runtime_dir()
-Path(runtime_dir).mkdir(exist_ok=True)
+runtime_dir = Path(jupyter_runtime_dir())
+runtime_dir.mkdir(exist_ok=True)
 
-connection_file = os.path.join(runtime_dir, f"kernel-{args.id}.json")
-log_file = os.path.join(runtime_dir, f"kernel-{args.id}.log")
+pid_file = runtime_dir.joinpath(f"kernel-{args.id}.pid")
+connection_file = runtime_dir.joinpath(f"kernel-{args.id}.json")
+log_file = runtime_dir.joinpath(f"kernel-{args.id}.log")
+
+
+def cleanup_kernel_files():
+    pid_file.unlink(missing_ok=True)
+    connection_file.unlink(missing_ok=True)
+
+
+def write_subkernel_info(pid: int):
+    subkernel = {"pid": pid}
+    with connection_file.open("r") as f:
+        subkernel["connection"] = json.load(f)
+    print(json.dumps(subkernel))
+
+
+# Check if existing process / connection_file exists and attempt to re-use
+if pid_file.exists() and connection_file.exists():
+    existing_pid = pid_file.read_text(encoding="utf-8")
+    try:
+        os.kill(int(existing_pid), 0)
+    except Exception:
+        # Process is not running, or pidfile malformed
+        cleanup_kernel_files()
+    else:
+        write_subkernel_info(existing_pid)
+        sys.exit()
+else:
+    cleanup_kernel_files()
 
 cmd_str = f"{args.launcher} --kernel={args.kernel} --KernelManager.connection_file={connection_file}"
 if args.log_to_file:
@@ -50,7 +78,7 @@ kernel = subprocess.Popen(
 )
 
 start = time.perf_counter()
-while not os.path.exists(connection_file):
+while not connection_file.exists():
     if time.perf_counter() - start > args.timeout:
         ret = kernel.poll()
         if ret is not None:
@@ -61,8 +89,4 @@ while not os.path.exists(connection_file):
         raise TimeoutError(msg)
     time.sleep(0.1)
 
-subkernel = {"pid": kernel.pid}
-with open(connection_file, "r") as f:
-    subkernel["connection"] = json.load(f)
-
-print(json.dumps(subkernel))
+write_subkernel_info(kernel.pid)
