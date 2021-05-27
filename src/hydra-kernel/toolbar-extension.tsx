@@ -1,7 +1,7 @@
 import { ReactWidget } from '@jupyterlab/apputils';
 import { Notebook } from '@jupyterlab/notebook';
 import { IObservableList } from '@jupyterlab/observables';
-import { map, toArray } from '@lumino/algorithm';
+import { toArray } from '@lumino/algorithm';
 import { caretDownIcon, HTMLSelect } from '@jupyterlab/ui-components';
 import * as React from 'react';
 import { ChameleonActions } from './actions';
@@ -16,15 +16,10 @@ export class CellBindingSwitcher extends ReactWidget {
   /**
    * Construct a new cell type switcher.
    */
-  constructor(
-    widget: Notebook,
-    bindings: IObservableList<IBindingModel>,
-    cellMeta: ICellMetadata
-  ) {
+  constructor(widget: Notebook, cellMeta: ICellMetadata) {
     super();
     this.addClass(TOOLBAR_CELLBINDING_CLASS);
     this._notebook = widget;
-    this._bindings = bindings;
     this._cellMeta = cellMeta;
     if (widget.model) {
       this.update();
@@ -32,7 +27,11 @@ export class CellBindingSwitcher extends ReactWidget {
     widget.activeCellChanged.connect(this.update, this);
     // Follow a change in the selection.
     widget.selectionChanged.connect(this.update, this);
-    this._bindings.changed.connect(this.update, this);
+  }
+
+  updateBindings(binding: IObservableList<IBindingModel>): void {
+    this._bindingList = toArray(binding.iter());
+    this.update();
   }
 
   /**
@@ -62,6 +61,11 @@ export class CellBindingSwitcher extends ReactWidget {
     }
   };
 
+  dispose(): void {
+    super.dispose();
+    this._bindingList = [];
+  }
+
   render(): JSX.Element {
     let value = '-';
     if (this._notebook.activeCell) {
@@ -81,18 +85,16 @@ export class CellBindingSwitcher extends ReactWidget {
         aria-label="Binding"
       >
         <option value="-">META</option>
-        {toArray(
-          map(this._bindings.iter(), ({ name }) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))
-        )}
+        {this._bindingList.map(({ name }) => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
       </HTMLSelect>
     );
   }
 
   private _notebook: Notebook = null;
-  private _bindings: IObservableList<IBindingModel> = null;
   private _cellMeta: ICellMetadata = null;
+  private _bindingList: IBindingModel[] = [];
 }

@@ -1,2 +1,2 @@
 import './artifact-sharing.css';
-import './cell-binding.css';
+import './hydra-kernel.css';

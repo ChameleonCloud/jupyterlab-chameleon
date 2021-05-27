@@ -54,7 +54,7 @@ export class BindingStatusPanel extends Widget {
   }
 
   private _onCurrentChanged(): void {
-    //const current = this._tracker.currentWidget;
+    console.log(this.currentWidget);
   }
 
   /**
