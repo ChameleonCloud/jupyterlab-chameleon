@@ -1,7 +1,6 @@
 import logging
 import os
 import pathlib
-from re import I
 import shlex
 from signal import SIGKILL
 import subprocess
@@ -22,6 +21,7 @@ from traitlets.traitlets import Bool, Type
 from .binding import Binding, BindingConnectionError, BindingManager
 from .kernelspec import RemoteKernelSpecManager
 from .magics import BindingMagics
+from .utils import redirect_output
 
 if typing.TYPE_CHECKING:
     from jupyter_client import KernelClient, KernelManager
@@ -108,15 +108,17 @@ class HydraKernelManager(IOLoopKernelManager):
         hosts_file_path.parent.mkdir(exist_ok=True)
         hosts_file_path.touch()
         with hosts_file_path.open("a") as hosts_file:
-            proc = subprocess.run(
-                shlex.split(f"ssh-keyscan -H {host}"),
-                stdout=hosts_file
-            )
-            if proc.returncode != 0:
-                LOG.warning((
-                    f"Failed to update host key for {host}: "
-                    f"{proc.stderr.read()}"
-                ))
+            with redirect_output() as stderr:
+                proc = subprocess.run(
+                    shlex.split(f"ssh-keyscan -H {host}"),
+                    stdout=hosts_file,
+                    stderr=stderr
+                )
+                if proc.returncode != 0:
+                    LOG.warning((
+                        f"Failed to update host key for {host}: "
+                        f"{proc.stderr.read()}"
+                    ))
 
     def _launch_kernel(self, kernel_cmd, **kw):
         # The connection file has already been written as part of `pre_start_kernel`,
@@ -372,7 +374,7 @@ class HydraKernel(IPythonKernel):
 
         # TODO: add parent in here?
         msg = kc.session.msg("execute_request", content)
-        self.log.debug(str(msg))
+        self.log.info(str(msg))
 
         proxy = ProxyComms(self.session, parent, self.iopub_socket, self.shell_streams)
 
