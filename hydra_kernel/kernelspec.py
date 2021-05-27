@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from hydra_kernel.utils import redirect_output
+import io
 import json
 import logging
 import os
@@ -41,11 +43,16 @@ class RemoteKernelSpecManager(KernelSpecManager):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._kernelspecs = None
+        self._kernelspec_info = {}
         if self.binding:
             self.binding.observe(self._on_connection_changed, "connection")
 
-    def _on_connection_changed(self, change):
+    def _invalidate_specs(self):
         self._kernelspecs = None
+        self._kernelspec_info = {}
+
+    def _on_connection_changed(self, change):
+        self._invalidate_specs()
 
     def find_kernel_specs(self):
         if self.binding.is_local:
@@ -81,36 +88,51 @@ class RemoteKernelSpecManager(KernelSpecManager):
             if not resource_dir:
                 raise NoSuchKernel(kernel_name)
 
-            with self.binding.get_file(os.path.join(resource_dir, "kernel.json")) as f:
-                spec_info = json.load(f)
-                LOG.info(f"Loaded {kernel_name} spec for {self.binding.name}: {spec_info}")
-                spec = self.kernel_spec_class(resource_dir=resource_dir, **spec_info)
+            if resource_dir not in self._kernelspec_info:
+                info_path = os.path.join(resource_dir, "kernel.json")
+                with self.binding.get_file(info_path) as f:
+                    self._kernelspec_info[resource_dir] = spec_info = json.load(f)
+                    LOG.info((
+                        f"Loaded {kernel_name} spec for {self.binding.name}: "
+                        f"{spec_info}"))
+
+            spec = self.kernel_spec_class(
+                resource_dir=resource_dir,
+                **self._kernelspec_info[resource_dir]
+            )
 
         spec.argv = ["hydra-agent", f"--kernel={kernel_name}"]
         return spec
 
     def install_kernel_spec(self, source_dir, kernel_name, **kwargs):
+        self._invalidate_specs()
+
         ansible_dir = os.path.join(sys.prefix, "share", "hydra-kernel", "ansible")
         host_vars = self._host_vars()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            ansible_runner.run(
-                private_data_dir=tmpdir,
-                project_dir=ansible_dir,
-                inventory={
-                    "all": {
-                        "hosts": {
-                            "KERNEL": host_vars
+            with redirect_output():
+                runner = ansible_runner.run(
+                    private_data_dir=tmpdir,
+                    project_dir=ansible_dir,
+                    inventory={
+                        "all": {
+                            "hosts": {
+                                "KERNEL": host_vars
+                            }
                         }
-                    }
-                },
-                playbook="kernel_action.yml",
-                extravars={
-                    "kernel_name": kernel_name,
-                    "kernel_action": "install",
-                },
-                event_handler=self._on_ansible_event,
-            )
+                    },
+                    playbook="kernel_action.yml",
+                    extravars={
+                        "kernel_name": kernel_name,
+                        "kernel_action": "install",
+                    },
+                    event_handler=self._on_ansible_event,
+                    # Don't output to stdout, store as JSON instead
+                    quiet=True,
+                    json_mode=True,
+                )
+                LOG.info(runner.stdout.read())
 
     def _host_vars(self):
         conn = self.binding.connection

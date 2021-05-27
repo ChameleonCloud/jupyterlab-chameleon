@@ -43,11 +43,14 @@ log_file = runtime_dir.joinpath(f"kernel-{args.id}.log")
 
 
 def cleanup_kernel_files():
-    pid_file.unlink(missing_ok=True)
-    connection_file.unlink(missing_ok=True)
+    for file in [pid_file, connection_file]:
+        if file.exists():
+            file.unlink()
 
 
 def write_subkernel_info(pid: int):
+    with pid_file.open("w") as f:
+        f.write(str(pid))
     subkernel = {"pid": pid}
     with connection_file.open("r") as f:
         subkernel["connection"] = json.load(f)

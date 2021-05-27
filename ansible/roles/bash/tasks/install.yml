@@ -1,13 +1,6 @@
 ---
-- ansible.builtin.include_role:
-    name: common
-    tasks_from: install.yml
-
 - ansible.builtin.pip:
-    name: "{{ item }}"
+    name: bash_kernel
     virtualenv: "{{ kernel_virtualenv }}"
-  loop:
-    - ipykernel
-    - bash_kernel
 
 - ansible.builtin.shell: "{{ kernel_virtualenv }}/bin/python -m bash_kernel.install"

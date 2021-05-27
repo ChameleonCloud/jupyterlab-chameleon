@@ -19,7 +19,7 @@ from jupyter_core.paths import jupyter_data_dir
 from tornado import gen
 from traitlets.traitlets import Bool, Type
 
-from .binding import Binding, BindingManager
+from .binding import Binding, BindingConnectionError, BindingManager
 from .kernelspec import RemoteKernelSpecManager
 from .magics import BindingMagics
 
@@ -179,7 +179,11 @@ class ProcessProxy(object):
             time.sleep(1)
 
     def send_signal(self, signum):
-        code, _, _ = self.binding.exec(f"kill -{signum} {self.pid}")
+        try:
+            code, _, _ = self.binding.exec(f"kill -{signum} {self.pid}")
+        except BindingConnectionError as exc:
+            LOG.error(f"{self.binding.name}: failed to send signal due to {exc}")
+            code = -1
         return code
 
     def kill(self):

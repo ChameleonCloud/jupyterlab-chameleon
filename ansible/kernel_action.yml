@@ -19,11 +19,11 @@
         name: ipykernel
         virtualenv: "{{ kernel_virtualenv }}"
     - ansible.builtin.copy:
-        src: hydra_agent.py
+        src: bin/hydra-agent
         dest: "{{ kernel_virtualenv }}/bin/hydra-agent"
         mode: preserve
     - ansible.builtin.copy:
-        src: hydra_subkernel.py
+        src: bin/hydra-subkernel
         dest: "{{ kernel_virtualenv }}/bin/hydra-subkernel"
         mode: preserve
   roles:

@@ -1,22 +1,20 @@
 from contextlib import contextmanager
+from hydra_kernel.exception import HydraException
 import io
 import ipaddress
 import json
 import logging
 import os
-from re import L
 import shlex
 import subprocess
 import tempfile
 import typing
 
 from paramiko.client import AutoAddPolicy, RejectPolicy, SSHClient
-from paramiko.ssh_exception import SSHException
+from paramiko.ssh_exception import NoValidConnectionsError, SSHException
 from scp import SCPClient
 from traitlets.traitlets import Bool, Enum, HasTraits, Dict, Unicode, observe
 
-if typing.TYPE_CHECKING:
-    from paramiko.channel import ChannelFile, ChannelStderrFile
 
 LOG = logging.getLogger(__name__)
 
@@ -25,6 +23,11 @@ DEFAULT_KERNEL = 'bash'
 SUPPORTED_KERNELS = (
     'bash', 'python'
 )
+
+
+class BindingConnectionError(HydraException):
+    _msg_fmt = "Could not connect to binding %(binding_name)"
+
 
 class Binding(HasTraits):
     name = Unicode(read_only=True)
@@ -70,12 +73,17 @@ class Binding(HasTraits):
         client.set_missing_host_key_policy(
             RejectPolicy if self.host_key_checking else AutoAddPolicy
         )
-        client.connect(
-            self.connection["host"],
-            username=self.connection.get("user"),
-            key_filename=self.connection.get("ssh_private_key_file"),
-            timeout=self.connection.get("ssh_timeout", DEFAULT_SSH_TIMEOUT),
-        )
+        try:
+            client.connect(
+                self.connection["host"],
+                username=self.connection.get("user"),
+                key_filename=self.connection.get("ssh_private_key_file"),
+                timeout=self.connection.get("ssh_timeout", DEFAULT_SSH_TIMEOUT),
+            )
+        except NoValidConnectionsError as exc:
+            raise BindingConnectionError(binding_name=self.name) from exc
+        except SSHException as exc:
+            raise BindingConnectionError(binding_name=self.name) from exc
         return client
 
     def exec(self, command: "typing.Union[list,str]", timeout=None) -> "tuple[int,io.RawIOBase,io.RawIOBase]":
