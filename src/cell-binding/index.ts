@@ -1,4 +1,6 @@
 import {
+  ILabShell,
+  ILayoutRestorer,
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
@@ -13,15 +15,18 @@ import {
   IObservableMap,
   ObservableList
 } from '@jupyterlab/observables';
-import { findIndex } from '@lumino/algorithm';
 import { KernelMessage } from '@jupyterlab/services';
 import {
   IComm,
   IKernelConnection
 } from '@jupyterlab/services/lib/kernel/kernel';
+import { ITranslator } from '@jupyterlab/translation';
+import { offlineBoltIcon } from '@jupyterlab/ui-components';
+import { findIndex } from '@lumino/algorithm';
 import { ReadonlyPartialJSONValue } from '@lumino/coreutils';
 import { DisposableDelegate, IDisposable } from '@lumino/disposable';
 import { Slot } from '@lumino/signaling';
+import { BindingStatusPanel } from './bindings';
 import { IBindingModel, ICellMetadata } from './tokens';
 import { CellBindingSwitcher } from './toolbar-extension';
 
@@ -280,4 +285,27 @@ namespace Private {
   }
 }
 
-export default plugin;
+const statusPlugin: JupyterFrontEndPlugin<void> = {
+  id: '@chameleoncloud/jupyterlab-chameleon:hydra-bindings',
+  autoStart: true,
+  requires: [ILabShell, ITranslator],
+  optional: [ILayoutRestorer],
+  activate: (
+    app: JupyterFrontEnd,
+    labshell: ILabShell,
+    translator: ITranslator,
+    restorer: ILayoutRestorer | null
+  ) => {
+    const trans = translator.load('jupyterlab');
+    const widget = new BindingStatusPanel(labshell, undefined, translator);
+    widget.title.icon = offlineBoltIcon;
+    widget.title.caption = trans.__('Hydra Bindings');
+    widget.id = 'chi-hydra-bindings';
+    labshell.add(widget, 'right', { rank: 100 });
+    if (restorer) {
+      restorer.add(widget, 'chi-hydra-bindings');
+    }
+  }
+};
+
+export default [plugin, statusPlugin];

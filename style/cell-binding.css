@@ -84,3 +84,23 @@
 .chi-Notebook-toolbarCellBindingDropdown span {
   top: 5px !important;
 }
+
+.chi-HydraBindings {
+  display: flex;
+  color: var(--jp-ui-font-color1);
+  background: var(--jp-layout-color1);
+}
+
+.chi-HydraBindings-content {
+  flex-grow: 1;
+}
+
+.chi-HydraBindings-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chi-HydraBindings-placeholderContent {
+  padding: 8px;
+}
