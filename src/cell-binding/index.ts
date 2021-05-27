@@ -263,17 +263,19 @@ namespace Private {
     cellMeta: ICellMetadata,
     bindings: IObservableList<IBindingModel>
   ): void {
-    const cellBindingName = cellMeta.getBindingName(widget.model);
+    CELL_CLASSES.forEach(cls => widget.removeClass(cls));
 
+    const cellBindingName = cellMeta.getBindingName(widget.model);
     const indexOf = findIndex(
       bindings.iter(),
       ({ name }, _) => name === cellBindingName
     );
 
-    CELL_CLASSES.forEach(cls => widget.removeClass(cls));
-
     if (indexOf > -1) {
       widget.addClass(CELL_CLASSES[indexOf % CELL_CLASSES.length]);
+      widget.editor.model.mimeType = 'shell';
+    } else {
+      widget.editor.model.mimeType = null;
     }
   }
 }
