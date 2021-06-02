@@ -1,3 +1,4 @@
+from functools import partial
 import logging
 import os
 import pathlib
@@ -9,6 +10,7 @@ import typing
 
 from ipykernel.comm import Comm
 from ipykernel.ipkernel import IPythonKernel
+from jupyter_client.channels import HBChannel
 from jupyter_client.connect import port_names, tunnel_to_kernel
 from jupyter_client.ioloop.manager import IOLoopKernelManager
 from jupyter_client.kernelspec import NoSuchKernel
@@ -52,9 +54,27 @@ class HydraChannel(ThreadedZMQSocketChannel):
         self._pipes = []
 
 
+class HydraHBChannel(HBChannel):
+    def __init__(self, context, session, address, loop):
+        super().__init__(context=context, session=session, address=address, loop=loop)
+        self._handlers = []
+
+    def call_handlers(self, since_last_heartbeat):
+        super().call_handlers(since_last_heartbeat)
+        for handler in self._handlers:
+            try:
+                handler(since_last_heartbeat)
+            except RuntimeError:
+                pass
+
+    def add_handler(self, callback):
+        self._handlers.append(callback)
+
+
 class HydraKernelClient(ThreadedKernelClient):
     shell_channel_class = Type(HydraChannel)
     iopub_channel_class = Type(HydraChannel)
+    hb_channel_class = Type(HydraHBChannel)
 
 
 class HydraKernelManager(IOLoopKernelManager):
@@ -75,7 +95,7 @@ class HydraKernelManager(IOLoopKernelManager):
     def needs_tunnel(self):
         return self.tunnel and not self.binding.is_local
 
-    def initbinding(self, kernel_id, binding: Binding):
+    def init_binding(self, kernel_id, binding: Binding):
         self.binding = binding
         self.kernel_id = kernel_id
         self.kernel_spec_manager = RemoteKernelSpecManager(binding=binding)
@@ -200,12 +220,9 @@ class HydraMultiKernelManager(MultiKernelManager):
         self.connection_dir = HYDRA_DATA_DIR
 
     def pre_start_kernel(self, kernel_name, kwargs):
-        (
-            km,
-            kernel_name,
-            kernel_id
-        ) = super().pre_start_kernel(kernel_name, kwargs)
-        km.initbinding(kernel_id, kwargs.pop("binding"))
+        ret: "tuple[HydraKernelManager,str,str]" = super().pre_start_kernel(kernel_name, kwargs)
+        (km, kernel_name, kernel_id) = ret
+        km.init_binding(kernel_id, kwargs.pop("binding"))
         return km, kernel_name, kernel_id
 
 
@@ -358,6 +375,7 @@ class HydraKernel(IPythonKernel):
             binding = self.binding_manager.get(binding_name)
             kernel_id: "str" = self.kernel_manager.start_kernel(binding.kernel, binding=binding)
             km: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
+            km.add_restart_callback(partial(self.on_subkernel_restart, binding_name))
             km.observe(self.on_subkernel_ports_changed, names=port_names)
             self._subkernels[binding_name] = km
 
@@ -365,9 +383,11 @@ class HydraKernel(IPythonKernel):
 
         if km not in self._clients:
             self.log.info(f"{binding_name}: connecting to sub-kernel")
-            kc = km.client()
+            kc: "HydraKernelClient" = km.client()
             # Only connect shell and iopub channels
             kc.start_channels(shell=True, iopub=True, stdin=False, hb=False)
+            hb_channel: "HydraHBChannel" = kc.hb_channel
+            hb_channel.add_handler(partial(self.on_subkernel_disconnect, binding_name))
             self._clients[km] = kc
 
         kc = self._clients[km]
@@ -399,3 +419,12 @@ class HydraKernel(IPythonKernel):
         kc = self._clients.pop(km, None)
         if kc:
             kc.stop_channels()
+
+    def on_subkernel_restart(self, binding_name):
+        if self._comm:
+            self._comm.send("binding_update",
+                self.binding_manager.get(binding_name).as_dict())
+
+    def on_subkernel_disconnect(self, binding_name):
+        if self._comm:
+            self._comm.send("binding_update", self.binding_manager.get(binding_name).as_dict())

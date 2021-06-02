@@ -23,7 +23,7 @@ import {
   nullTranslator,
   TranslationBundle
 } from '@jupyterlab/translation';
-import { map, toArray } from '@lumino/algorithm';
+import { toArray } from '@lumino/algorithm';
 import { SingletonLayout, Widget } from '@lumino/widgets';
 import * as React from 'react';
 import { IBindingModel, IBindingRegistry } from './tokens';
@@ -141,25 +141,68 @@ export class BindingListWidget extends ReactWidget {
   }
 
   render(): JSX.Element {
-    return (
-      <div>
-        {toArray(
-          map(this._bindings.iter(), (binding: IBindingModel) => {
-            return (
-              <div>
-                <h4>{binding.name}</h4>
-                <div>
-                  Host: {binding.connection.host}
-                  <br />
-                  User: {binding.connection.user}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    );
+    return <BindingStatusList bindings={this._bindings} />;
+  }
+
+  dispose(): void {
+    super.dispose();
+    this._bindings = null;
   }
 
   private _bindings: IObservableList<IBindingModel>;
+}
+
+class BindingStatusList extends React.Component<
+  BindingStatusList.IProps,
+  BindingStatusList.IState
+> {
+  constructor(props: BindingStatusList.IProps) {
+    super(props);
+    this.state = { bindings: toArray(props.bindings.iter()) };
+    props.bindings.changed.connect(this.onBindingsChanged, this);
+  }
+  onBindingsChanged(bindings: IObservableList<IBindingModel>) {
+    // Translate bindings property changes to state changes so React
+    // will correctly re-render the component.
+    this.setState({ bindings: toArray(bindings.iter()) });
+  }
+  render() {
+    return (
+      <div>
+        {this.state.bindings.map((binding: IBindingModel) => {
+          return <BindingStatus binding={binding} />;
+        })}
+      </div>
+    );
+  }
+  componentWillUnmount() {
+    this.props.bindings.changed.disconnect(this.onBindingsChanged, this);
+  }
+}
+
+namespace BindingStatusList {
+  export interface IProps {
+    readonly bindings: IObservableList<IBindingModel>;
+  }
+
+  export interface IState {
+    bindings: IBindingModel[];
+  }
+}
+
+function BindingStatus(props: BindingStatus.IProps) {
+  const connection = props.binding.connection;
+  return (
+    <div>
+      <h3>{props.binding.name}</h3>
+      {connection.user && <span>{connection.user}@</span>}
+      <span>{connection.host}</span>
+    </div>
+  );
+}
+
+namespace BindingStatus {
+  export interface IProps {
+    readonly binding: IBindingModel;
+  }
 }
