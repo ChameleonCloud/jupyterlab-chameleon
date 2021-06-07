@@ -52,7 +52,12 @@ class Heartbeat {
     const result = await dialog.launch();
     dialog.dispose();
     if (result.button.accept) {
-      document.location.href = redirectUrl;
+      if (redirectUrl) {
+        redirectUrl = `${redirectUrl}?next=${document.location.pathname}`;
+        document.location.href = redirectUrl;
+      } else {
+        document.location.reload();
+      }
     }
   }
 
