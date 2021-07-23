@@ -64,7 +64,7 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
     kernel.connectionStatusChanged.connect(onKernelConnectionStatusChanged);
 
     const onKernelStatusChanged = (_: IKernelConnection, status: Status) => {
-      if (status === "")
+      // TODO
     };
     kernel.statusChanged.connect(onKernelStatusChanged);
 
