@@ -24,7 +24,7 @@ import ansible_runner
 from jupyter_client.kernelspec import KernelSpecManager, NoSuchKernel
 from traitlets.traitlets import Instance
 
-from hydra_kernel.binding import Binding
+from hydra_kernel.binding import Binding, BindingState
 
 LOG = logging.getLogger(__name__)
 

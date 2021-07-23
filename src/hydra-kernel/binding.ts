@@ -15,14 +15,16 @@
 import { IObservableList, ObservableList } from '@jupyterlab/observables';
 import { KernelMessage } from '@jupyterlab/services';
 import {
+  ConnectionStatus,
   IComm,
-  IKernelConnection
+  IKernelConnection,
+  Status
 } from '@jupyterlab/services/lib/kernel/kernel';
 import { IDisposable } from '@lumino/disposable';
 import { IBindingModel, IBindingRegistry } from './tokens';
 import { findIndex } from '@lumino/algorithm';
 
-const COMM_CHANNEL = 'banana';
+const COMM_CHANNEL = 'hydra';
 
 export class BindingRegistry implements IBindingRegistry, IDisposable {
   isDisposed = false;
@@ -33,35 +35,53 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
 
   register(kernel: IKernelConnection): IObservableList<IBindingModel> {
     if (this._bindings.has(kernel)) {
-      throw new Error('Kernel already registered');
+      return this._bindings.get(kernel).bindings;
     }
 
-    let comm: IComm = null;
-
-    if (kernel.handleComms) {
-      if (kernel.hasComm(COMM_CHANNEL)) {
-        throw new Error('Kernel already has Hydra comm open');
-      }
-      comm = kernel.createComm(COMM_CHANNEL);
+    const createComm = () => {
+      const comm: IComm = kernel.createComm(COMM_CHANNEL);
       comm.onMsg = this._onCommMsg.bind(this);
       comm.open();
-      comm.send({ event: 'binding_list_request' });
-    }
+      console.log('kernel comm opened');
+      return comm;
+    };
+
+    const tracker = {
+      bindings: new ObservableList<IBindingModel>(),
+      comm: createComm()
+    };
+
+    const onKernelConnectionStatusChanged = (
+      _: IKernelConnection,
+      status: ConnectionStatus
+    ) => {
+      console.log('kernel connection status changed', status);
+      if (status === 'connected') {
+        // TODO: when do we need to re-establish comm?
+        tracker.comm.send({ event: 'binding_list_request' });
+      }
+    };
+    kernel.connectionStatusChanged.connect(onKernelConnectionStatusChanged);
+
+    const onKernelStatusChanged = (_: IKernelConnection, status: Status) => {
+      if (status === "")
+    };
+    kernel.statusChanged.connect(onKernelStatusChanged);
 
     const onKernelDisposed = () => {
+      console.log('kernel disposed');
       kernel.disposed.disconnect(onKernelDisposed);
+      kernel.connectionStatusChanged.disconnect(
+        onKernelConnectionStatusChanged
+      );
+      kernel.statusChanged.disconnect(onKernelStatusChanged);
       this.unregister(kernel);
     };
     kernel.disposed.connect(onKernelDisposed);
 
-    const bindings = new ObservableList<IBindingModel>();
+    this._bindings.set(kernel, tracker);
 
-    this._bindings.set(kernel, {
-      comm,
-      bindings
-    });
-
-    return bindings;
+    return tracker.bindings;
   }
 
   unregister(kernel: IKernelConnection): void {

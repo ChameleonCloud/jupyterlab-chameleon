@@ -168,7 +168,7 @@ class BindingStatusList extends React.Component<
   }
   render() {
     return (
-      <div>
+      <div className="chi-BindingStatus">
         {this.state.bindings.map((binding: IBindingModel) => {
           return <BindingStatus binding={binding} />;
         })}
@@ -193,10 +193,15 @@ namespace BindingStatusList {
 function BindingStatus(props: BindingStatus.IProps) {
   const connection = props.binding.connection;
   return (
-    <div>
-      <h3>{props.binding.name}</h3>
-      {connection.user && <span>{connection.user}@</span>}
-      <span>{connection.host}</span>
+    <div className="chi-Binding">
+      <h3 className="">{props.binding.name}</h3>
+      <span className={`chi-BindingState-${props.binding.state}`}>
+        {props.binding.state}
+      </span>
+      <div className="chi-BindingConnection">
+        Host: {connection.user && <span>{connection.user}@</span>}
+        <span>{connection.host}</span>
+      </div>
     </div>
   );
 }

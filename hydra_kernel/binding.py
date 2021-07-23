@@ -1,5 +1,3 @@
-from contextlib import contextmanager
-from hydra_kernel.exception import HydraException
 import io
 import ipaddress
 import json
@@ -9,12 +7,14 @@ import shlex
 import subprocess
 import tempfile
 import typing
+from contextlib import contextmanager
 
 from paramiko.client import AutoAddPolicy, RejectPolicy, SSHClient
 from paramiko.ssh_exception import NoValidConnectionsError, SSHException
 from scp import SCPClient
-from traitlets.traitlets import Bool, Enum, HasTraits, Dict, Unicode, observe
+from traitlets.traitlets import Bool, Dict, Enum, HasTraits, Unicode, observe
 
+from hydra_kernel.exception import HydraException
 
 LOG = logging.getLogger(__name__)
 
@@ -25,6 +25,15 @@ SUPPORTED_KERNELS = (
 )
 
 
+# TODO: figure out how to properly integrate this into enum.Enum and
+# traitlet.Enum.
+class BindingState:
+    CONNECTED = "connected"
+    DISCONNECTED = "disconnected"
+    RESTARTED = "restarted"
+    CREATING = "creating"
+
+
 class BindingConnectionError(HydraException):
     _msg_fmt = "Could not connect to binding %(binding_name)"
 
@@ -33,6 +42,12 @@ class Binding(HasTraits):
     name = Unicode(read_only=True)
     kernel = Enum(SUPPORTED_KERNELS, default_value=DEFAULT_KERNEL)
     connection = Dict()
+    state = Enum([
+        BindingState.CONNECTED,
+        BindingState.DISCONNECTED,
+        BindingState.RESTARTED,
+        BindingState.CREATING
+    ], default_value=BindingState.DISCONNECTED)
 
     host_key_checking = Bool(False, help=(
         "If set, remote connections to hosts that do not have an entry in the "
@@ -163,7 +178,7 @@ class BindingManager(object):
         if self._on_change_callback:
             self._on_change_callback(binding, change)
 
-    def set(self, name, kernel=None, connection=None):
+    def set(self, name, kernel: "str"=None, connection: "dict"=None, state: "str"=None):
         binding = self._binding_map.get(name)
         if not binding:
             binding = Binding()
@@ -175,6 +190,8 @@ class BindingManager(object):
             binding.kernel = kernel
         if connection:
             binding.connection = connection
+        if state:
+            binding.state = state
 
     def get(self, name) -> "Binding":
         return self._binding_map.get(name)

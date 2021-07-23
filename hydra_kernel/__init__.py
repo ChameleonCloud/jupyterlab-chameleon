@@ -2,7 +2,7 @@ import logging
 
 from .kernel import HydraKernel, __version__
 
-DEBUG = False
+DEBUG = True
 if DEBUG:
     log_level = logging.DEBUG
     paramiko_level = logging.DEBUG
