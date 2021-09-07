@@ -84,10 +84,13 @@ class HydraKernelManager(IOLoopKernelManager):
     # the kernel manager will override them after launching the subkernel.
     cache_ports = False
 
-    tunnel = Bool(True, help=(
-        "If set, connection to remote kernel will be established over an SSH "
-        "tunnel. Remote kernels on loopback hosts will not have tunnels."
-    ))
+    tunnel = Bool(
+        True,
+        help=(
+            "If set, connection to remote kernel will be established over an SSH "
+            "tunnel. Remote kernels on loopback hosts will not have tunnels."
+        ),
+    )
 
     binding: Binding = None
 
@@ -105,7 +108,9 @@ class HydraKernelManager(IOLoopKernelManager):
             self.kernel_spec_manager.get_kernel_spec(self.kernel_name)
         except NoSuchKernel:
             LOG.info(f"No kernel found for '{self.kernel_name}', attempting install")
-            self.kernel_spec_manager.install_kernel_spec(None, kernel_name=self.kernel_name)
+            self.kernel_spec_manager.install_kernel_spec(
+                None, kernel_name=self.kernel_name
+            )
         return super().pre_start_kernel(**kw)
 
     def format_kernel_cmd(self, extra_arguments):
@@ -123,8 +128,7 @@ class HydraKernelManager(IOLoopKernelManager):
             setattr(self, name, 0)
 
     def _save_host_key(self, host):
-        hosts_file_path = pathlib.Path(
-            pathlib.Path.home(), ".ssh", "known_hosts")
+        hosts_file_path = pathlib.Path(pathlib.Path.home(), ".ssh", "known_hosts")
         hosts_file_path.parent.mkdir(exist_ok=True)
         hosts_file_path.touch()
         with hosts_file_path.open("a") as hosts_file:
@@ -132,13 +136,15 @@ class HydraKernelManager(IOLoopKernelManager):
                 proc = subprocess.run(
                     shlex.split(f"ssh-keyscan -H {host}"),
                     stdout=hosts_file,
-                    stderr=stderr
+                    stderr=stderr,
                 )
                 if proc.returncode != 0:
-                    LOG.warning((
-                        f"Failed to update host key for {host}: "
-                        f"{proc.stderr.read()}"
-                    ))
+                    LOG.warning(
+                        (
+                            f"Failed to update host key for {host}: "
+                            f"{proc.stderr.read()}"
+                        )
+                    )
 
     def _launch_kernel(self, kernel_cmd, **kw):
         # The connection file has already been written as part of `pre_start_kernel`,
@@ -169,7 +175,7 @@ class HydraKernelManager(IOLoopKernelManager):
                 self.iopub_port,
                 self.stdin_port,
                 self.hb_port,
-                self.control_port
+                self.control_port,
             ) = tunnel_to_kernel(conn_info, sshserver, sshkey=sshkey)
 
         self.write_connection_file()
@@ -220,7 +226,9 @@ class HydraMultiKernelManager(MultiKernelManager):
         self.connection_dir = HYDRA_DATA_DIR
 
     def pre_start_kernel(self, kernel_name, kwargs):
-        ret: "tuple[HydraKernelManager,str,str]" = super().pre_start_kernel(kernel_name, kwargs)
+        ret: "tuple[HydraKernelManager,str,str]" = super().pre_start_kernel(
+            kernel_name, kwargs
+        )
         (km, kernel_name, kernel_id) = ret
         km.init_binding(kernel_id, kwargs.pop("binding"))
         return km, kernel_name, kernel_id
@@ -310,6 +318,7 @@ class HydraKernel(IPythonKernel):
             self.shell.register_magics(binding_magics)
 
         self.binding_manager.on_change(self.on_binding_change)
+        self.binding_manager.on_remove(self.on_binding_remove)
         self.kernel_manager = HydraMultiKernelManager()
 
     def start(self):
@@ -335,22 +344,35 @@ class HydraKernel(IPythonKernel):
 
     def on_binding_change(self, binding: "Binding", change: "dict"):
         if self._comm:
-            self._comm.send({
-                "event": "binding_update",
-                "binding": binding.as_dict()
-            })
+            self._comm.send({"event": "binding_update", "binding": binding.as_dict()})
+
+    def on_binding_remove(self, binding: "Binding"):
+        try:
+            kernel_id = self._subkernels[binding.name].kernel_id
+            self.kernel_manager.shutdown_kernel(kernel_id)
+            del self._subkernels[binding.name]
+        except Exception as exc:
+            self.log.error(f"Failed to tear down kernel for {binding.name}: {exc}")
+
+        if self._comm:
+            self._comm.send(
+                {
+                    "event": "binding_remove",
+                    "binding": binding.as_dict(),
+                }
+            )
 
     def on_comm_msg(self, message: "dict"):
         payload = message.get("content", {}).get("data", {})
         LOG.info(f"Got message: {payload}")
         if payload["event"] == "binding_list_request":
             if self._comm:
-                self._comm.send({
-                    "event": "binding_list_reply",
-                    "bindings": [
-                        b.as_dict() for b in self.binding_manager.list()
-                    ]
-                })
+                self._comm.send(
+                    {
+                        "event": "binding_list_reply",
+                        "bindings": [b.as_dict() for b in self.binding_manager.list()],
+                    }
+                )
 
     @property
     def banner(self):
@@ -376,7 +398,16 @@ class HydraKernel(IPythonKernel):
         if binding_name not in self._subkernels:
             binding.state = BindingState.CREATING
             self.log.info(f"{binding_name}: starting sub-kernel")
-            kernel_id: "str" = self.kernel_manager.start_kernel(binding.kernel, binding=binding)
+            try:
+                kernel_id: "str" = self.kernel_manager.start_kernel(
+                    binding.kernel, binding=binding
+                )
+            except Exception as exc:
+                self.log.error(exc)
+                self.log.error(type(exc))
+                self.binding_manager.set(binding_name, state=BindingState.ERROR)
+                return
+
             km: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
             km.add_restart_callback(partial(self.on_subkernel_restart, binding_name))
             km.observe(self.on_subkernel_ports_changed, names=port_names)
@@ -394,11 +425,18 @@ class HydraKernel(IPythonKernel):
             kc.start_channels(stdin=False)
             hb_channel: "HydraHBChannel" = kc.hb_channel
             hb_channel.add_handler(partial(self.on_subkernel_disconnect, binding_name))
-            self.on_subkernel_connect(binding_name)
             self._clients[km] = kc
 
+        self.on_subkernel_connect(binding_name)
+
         kc = self._clients[km]
-        proxy = ProxyComms(self.session, ident=ident, parent=parent, iopub=self.iopub_socket, shell=stream)
+        proxy = ProxyComms(
+            self.session,
+            ident=ident,
+            parent=parent,
+            iopub=self.iopub_socket,
+            shell=stream,
+        )
         kc.iopub_channel.pipe(proxy.on_iopub_message)
         kc.shell_channel.pipe(proxy.on_shell_message)
         msg = kc.session.msg("execute_request", content)
@@ -425,10 +463,13 @@ class HydraKernel(IPythonKernel):
             kc.stop_channels()
 
     def on_subkernel_restart(self, binding_name):
+        self.log.info(f"{binding_name}: subkernel restarted")
         self.binding_manager.set(binding_name, state=BindingState.RESTARTED)
 
     def on_subkernel_connect(self, binding_name):
+        self.log.info(f"{binding_name}: subkernel connected")
         self.binding_manager.set(binding_name, state=BindingState.CONNECTED)
 
     def on_subkernel_disconnect(self, binding_name, since_last_heartbeat):
+        self.log.info(f"{binding_name}: subkernel disconnected")
         self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)

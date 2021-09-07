@@ -61,11 +61,26 @@ export class HydraNotebookExtension
       changed: IObservableList.IChangedArgs<IBindingModel>
     ) => {
       switcher.updateBindings(bindings);
-      panel.content.widgets.forEach(cellWidget => {
-        if (cellWidget.model.type === 'code') {
-          Private.updateCellDisplay(cellWidget, cellMetadata, bindings);
-        }
-      });
+      if (changed.type === 'add') {
+        panel.content.widgets.forEach(cellWidget => {
+          if (cellWidget.model.type === 'code') {
+            Private.updateCellDisplay(cellWidget, cellMetadata, bindings);
+          }
+        });
+      } else if (changed.type === 'remove') {
+        // Ensure binding is no longer referenced in cell metadata
+        changed.oldValues.forEach(binding => {
+          panel.content.widgets.forEach(cellWidget => {
+            if (cellWidget.model.type === 'code') {
+              if (
+                cellMetadata.getBindingName(cellWidget.model) === binding.name
+              ) {
+                cellMetadata.removeBinding(cellWidget.model);
+              }
+            }
+          });
+        });
+      }
     };
 
     const onKernelChanged = (

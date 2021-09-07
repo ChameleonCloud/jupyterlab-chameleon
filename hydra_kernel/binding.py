@@ -19,10 +19,8 @@ from hydra_kernel.exception import HydraException
 LOG = logging.getLogger(__name__)
 
 DEFAULT_SSH_TIMEOUT = 10
-DEFAULT_KERNEL = 'bash'
-SUPPORTED_KERNELS = (
-    'bash', 'python'
-)
+DEFAULT_KERNEL = "bash"
+SUPPORTED_KERNELS = ("bash", "python")
 
 
 # TODO: figure out how to properly integrate this into enum.Enum and
@@ -32,27 +30,35 @@ class BindingState:
     DISCONNECTED = "disconnected"
     RESTARTED = "restarted"
     CREATING = "creating"
+    ERROR = "error"
 
 
 class BindingConnectionError(HydraException):
-    _msg_fmt = "Could not connect to binding %(binding_name)"
+    _msg_fmt = "Could not connect to binding %(binding_name)s"
 
 
 class Binding(HasTraits):
     name = Unicode(read_only=True)
     kernel = Enum(SUPPORTED_KERNELS, default_value=DEFAULT_KERNEL)
     connection = Dict()
-    state = Enum([
-        BindingState.CONNECTED,
-        BindingState.DISCONNECTED,
-        BindingState.RESTARTED,
-        BindingState.CREATING
-    ], default_value=BindingState.DISCONNECTED)
+    state = Enum(
+        [
+            BindingState.CONNECTED,
+            BindingState.DISCONNECTED,
+            BindingState.RESTARTED,
+            BindingState.CREATING,
+            BindingState.ERROR,
+        ],
+        default_value=BindingState.DISCONNECTED,
+    )
 
-    host_key_checking = Bool(False, help=(
-        "If set, remote connections to hosts that do not have an entry in the "
-        "system host key list will raise an error."
-    ))
+    host_key_checking = Bool(
+        False,
+        help=(
+            "If set, remote connections to hosts that do not have an entry in the "
+            "system host key list will raise an error."
+        ),
+    )
 
     _virtualenv = None
 
@@ -79,8 +85,7 @@ class Binding(HasTraits):
 
     def as_dict(self):
         return {
-            trait: trait_type.get(self)
-            for trait, trait_type in self.traits().items()
+            trait: trait_type.get(self) for trait, trait_type in self.traits().items()
         }
 
     def _ssh_connect(self) -> "SSHClient":
@@ -101,7 +106,9 @@ class Binding(HasTraits):
             raise BindingConnectionError(binding_name=self.name) from exc
         return client
 
-    def exec(self, command: "typing.Union[list,str]", timeout=None) -> "tuple[int,io.RawIOBase,io.RawIOBase]":
+    def exec(
+        self, command: "typing.Union[list,str]", timeout=None
+    ) -> "tuple[int,io.RawIOBase,io.RawIOBase]":
         """Execute a command on the binding host.
 
         If the binding is a local binding, the command is executed directly, via
@@ -163,6 +170,7 @@ class Binding(HasTraits):
 class BindingManager(object):
 
     _on_change_callback = None
+    _on_remove_callback = None
     _binding_map = {}
     _kernel_map = {}
 
@@ -171,6 +179,11 @@ class BindingManager(object):
             raise ValueError("Callback argument must be callable")
         self._on_change_callback = fn
 
+    def on_remove(self, fn):
+        if not callable(fn):
+            raise ValueError("Callback argument must be callable")
+        self._on_remove_callback = fn
+
     def _on_change(self, change):
         binding = change.pop("owner", None)
         if not binding:
@@ -178,7 +191,9 @@ class BindingManager(object):
         if self._on_change_callback:
             self._on_change_callback(binding, change)
 
-    def set(self, name, kernel: "str"=None, connection: "dict"=None, state: "str"=None):
+    def set(
+        self, name, kernel: "str" = None, connection: "dict" = None, state: "str" = None
+    ):
         binding = self._binding_map.get(name)
         if not binding:
             binding = Binding()
@@ -198,3 +213,11 @@ class BindingManager(object):
 
     def list(self) -> "list[Binding]":
         return self._binding_map.values()
+
+    def delete(self, name):
+        if name not in self._binding_map:
+            raise ValueError("Binding not found")
+        binding = self._binding_map[name]
+        del self._binding_map[name]
+        if self._on_remove_callback:
+            self._on_remove_callback(binding)

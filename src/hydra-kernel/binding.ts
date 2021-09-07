@@ -64,7 +64,7 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
     kernel.connectionStatusChanged.connect(onKernelConnectionStatusChanged);
 
     const onKernelStatusChanged = (_: IKernelConnection, status: Status) => {
-      // TODO
+      console.log('kernel status changed', status);
     };
     kernel.statusChanged.connect(onKernelStatusChanged);
 
@@ -149,6 +149,16 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
           tracker.bindings.set(bindingIndex, binding);
         } else {
           tracker.bindings.push(binding);
+        }
+        break;
+      case 'binding_remove':
+        binding = (data.binding as unknown) as IBindingModel;
+        bindingIndex = findIndex(
+          tracker.bindings.iter(),
+          ({ name }, _) => name === binding.name
+        );
+        if (bindingIndex > -1) {
+          tracker.bindings.remove(bindingIndex);
         }
         break;
       default:

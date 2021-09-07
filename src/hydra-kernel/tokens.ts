@@ -6,7 +6,12 @@ import { Token } from '@lumino/coreutils';
 export interface IBindingModel {
   readonly name: string;
   readonly connection: IBindingModel.IConnection;
-  readonly state: 'connected' | 'disconnected' | 'interrupted' | 'creating';
+  readonly state:
+    | 'connected'
+    | 'disconnected'
+    | 'interrupted'
+    | 'creating'
+    | 'error';
 }
 
 export declare namespace IBindingModel {
