@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 import sys
+import typing
 
 from IPython.core.magic import (
     Magics,
@@ -9,6 +10,9 @@ from IPython.core.magic import (
 from traitlets.traitlets import Unicode
 
 from hydra_kernel.binding import Binding
+
+if typing.TYPE_CHECKING:
+    from .binding import BindingManager
 
 
 class NonExitingArgumentParser(ArgumentParser):
@@ -22,7 +26,7 @@ class BindingMagics(Magics):
 
     default_user = Unicode("cc", help="Default username for authentication")
 
-    def __init__(self, shell, binding_manager):
+    def __init__(self, shell, binding_manager: "BindingManager"):
         super(BindingMagics, self).__init__(shell)
         self.binding_manager = binding_manager
         self.parser = NonExitingArgumentParser(prog="%binding")
@@ -63,7 +67,7 @@ class BindingMagics(Magics):
         if not args.command:
             return
         if args.command == "set":
-            return self.binding_manager.set(
+            self.binding_manager.set(
                 args.name,
                 kernel=args.kernel,
                 connection={
@@ -73,6 +77,7 @@ class BindingMagics(Magics):
                 },
             )
         elif args.command == "list":
-            return self.binding_manager.list()
+            print("\n".join(str(binding) for binding in self.binding_manager.list()))
         elif args.command == "delete":
-            return self.binding_manager.delete(args.name)
+            self.binding_manager.delete(args.name)
+            print(f"Deleted binding {args.name}")

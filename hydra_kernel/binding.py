@@ -62,6 +62,11 @@ class Binding(HasTraits):
 
     _virtualenv = None
 
+    def __str__(self):
+        conn = self.connection
+        host = "Local" if self.is_local else f"Host: {conn['user']}@{conn['host']}"
+        return "\n".join([self.name, f"\t{self.state}", f"\t{host}"])
+
     @observe("connection")
     def _on_connection_change(self, change):
         # Invalidate cached values
