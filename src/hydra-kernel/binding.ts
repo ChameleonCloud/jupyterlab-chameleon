@@ -46,9 +46,9 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
       return comm;
     };
 
-    const tracker = {
+    const tracker: Private.BindingTracker = {
       bindings: new ObservableList<IBindingModel>(),
-      comm: createComm()
+      comm: null
     };
 
     const onKernelConnectionStatusChanged = (
@@ -57,7 +57,10 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
     ) => {
       console.log('kernel connection status changed', status);
       if (status === 'connected') {
-        // TODO: when do we need to re-establish comm?
+        if (tracker.comm) {
+          tracker.comm.dispose();
+        }
+        tracker.comm = createComm();
         tracker.comm.send({ event: 'binding_list_request' });
       }
     };
@@ -171,7 +174,7 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
 
 namespace Private {
   export class BindingTracker {
-    comm: IComm;
+    comm?: IComm;
     bindings: IObservableList<IBindingModel>;
   }
 }

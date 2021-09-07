@@ -30,6 +30,7 @@ if typing.TYPE_CHECKING:
 
 LOG = logging.getLogger(__name__)
 HYDRA_DATA_DIR = os.path.join(jupyter_data_dir(), "hydra-kernel")
+KERNEL_HEARTBEAT_TIMEOUT = 60  # seconds
 
 pathlib.Path(HYDRA_DATA_DIR).mkdir(exist_ok=True)
 
@@ -405,7 +406,7 @@ class HydraKernel(IPythonKernel):
             except Exception as exc:
                 self.log.error(exc)
                 self.log.error(type(exc))
-                self.binding_manager.set(binding_name, state=BindingState.ERROR)
+                self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)
                 return
 
             km: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
@@ -471,5 +472,9 @@ class HydraKernel(IPythonKernel):
         self.binding_manager.set(binding_name, state=BindingState.CONNECTED)
 
     def on_subkernel_disconnect(self, binding_name, since_last_heartbeat):
-        self.log.info(f"{binding_name}: subkernel disconnected")
-        self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)
+        # The subkernels take a bit to initialize, during which time the
+        # heartbeat failure can trigger a few times. Wait until some timeout
+        # to actually trip the state to disconnected.
+        if since_last_heartbeat > KERNEL_HEARTBEAT_TIMEOUT:
+            self.log.info(f"{binding_name}: subkernel disconnected")
+            self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)

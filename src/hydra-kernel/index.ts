@@ -61,26 +61,15 @@ export class HydraNotebookExtension
       changed: IObservableList.IChangedArgs<IBindingModel>
     ) => {
       switcher.updateBindings(bindings);
-      if (changed.type === 'add') {
-        panel.content.widgets.forEach(cellWidget => {
-          if (cellWidget.model.type === 'code') {
-            Private.updateCellDisplay(cellWidget, cellMetadata, bindings);
-          }
-        });
-      } else if (changed.type === 'remove') {
-        // Ensure binding is no longer referenced in cell metadata
-        changed.oldValues.forEach(binding => {
-          panel.content.widgets.forEach(cellWidget => {
-            if (cellWidget.model.type === 'code') {
-              if (
-                cellMetadata.getBindingName(cellWidget.model) === binding.name
-              ) {
-                cellMetadata.removeBinding(cellWidget.model);
-              }
-            }
-          });
-        });
-      }
+      panel.content.widgets.forEach(cellWidget => {
+        if (cellWidget.model.type === 'code') {
+          Private.updateCellDisplay(cellWidget, cellMetadata, bindings);
+        }
+      });
+      // NOTE(jason): We do NOT remove the binding metadata here even if the
+      // model is removed. This is because there are many reasons why the
+      // binding list could change: the kernel could be restarted for example.
+      // The user can manually re-link any cell tied to a deleted binding.
     };
 
     const onKernelChanged = (
@@ -118,8 +107,12 @@ export class HydraNotebookExtension
         Private.updateCellDisplay(cellWidget, cellMetadata, bindings);
       });
 
-      if (changed.newIndex > 0 && !cellMetadata.hasBinding(cellModel)) {
-        // Automatically seed new cells w/ the prior binding.
+      if (
+        changed.newIndex > 0 &&
+        !cellModel.value.text.length &&
+        !cellMetadata.hasBinding(cellModel)
+      ) {
+        // Automatically seed new cells added to the end w/ the prior binding.
         const previousCell = cells.get(changed.newIndex - 1);
         const previousBinding = cellMetadata.getBindingName(previousCell);
         if (previousBinding) {

@@ -91,6 +91,26 @@
   background: var(--jp-layout-color1);
 }
 
+.chi-BindingStatus-header {
+  font-size: var(--jp-ui-font-size2);
+  border-bottom: 1px solid var(--jp-border-color2);
+  padding: 6px 12px;
+}
+
+.chi-Binding {
+  padding: 12px;
+  border-bottom: 1px solid var(--jp-border-color2);
+}
+
+.chi-Binding-name {
+  margin-bottom: 0;
+  font-weight: bolder;
+}
+
+.chi-BindingState-disconnected {
+  color: var(--jp-error-color0);
+}
+
 .chi-HydraBindings-content {
   flex-grow: 1;
 }

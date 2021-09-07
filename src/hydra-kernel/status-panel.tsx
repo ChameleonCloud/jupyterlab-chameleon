@@ -169,6 +169,7 @@ class BindingStatusList extends React.Component<
   render() {
     return (
       <div className="chi-BindingStatus">
+        <div className="chi-BindingStatus-header">Active bindings</div>
         {this.state.bindings.map((binding: IBindingModel) => {
           return <BindingStatus binding={binding} />;
         })}
@@ -192,16 +193,21 @@ namespace BindingStatusList {
 
 function BindingStatus(props: BindingStatus.IProps) {
   const connection = props.binding.connection;
+  const hostDisplay = ['127.0.0.1', 'localhost'].includes(connection.host) ? (
+    <span>Local</span>
+  ) : (
+    <span>
+      Host: {connection.user && <span>{connection.user}@</span>}
+      <span>{connection.host}</span>
+    </span>
+  );
   return (
     <div className="chi-Binding">
-      <h3 className="">{props.binding.name}</h3>
+      <div className="chi-Binding-name">{props.binding.name}</div>
       <span className={`chi-BindingState-${props.binding.state}`}>
         {props.binding.state}
       </span>
-      <div className="chi-BindingConnection">
-        Host: {connection.user && <span>{connection.user}@</span>}
-        <span>{connection.host}</span>
-      </div>
+      <div className="chi-BindingConnection">{hostDisplay}</div>
     </div>
   );
 }
