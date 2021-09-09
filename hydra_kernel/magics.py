@@ -44,7 +44,11 @@ class BindingMagics(Magics):
             "--user", help="user to authenticate to host as", default=self.default_user
         )
         parser_set.add_argument(
-            "--connection", choices={"ssh"}, help="type of connection", default="ssh"
+            "--connection",
+            choices={"ssh"},
+            help="type of connection",
+            default="ssh",
+            dest="connection_type",
         )
         parser_set.add_argument(
             "--ssh-private-key-file",
@@ -73,6 +77,7 @@ class BindingMagics(Magics):
                 connection={
                     "host": args.host,
                     "user": args.user,
+                    "type": args.connection_type,
                     "ssh_private_key_file": args.ssh_private_key_file,
                 },
             )

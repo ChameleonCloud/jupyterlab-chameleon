@@ -14,13 +14,19 @@ from jupyter_client.channels import HBChannel
 from jupyter_client.connect import port_names, tunnel_to_kernel
 from jupyter_client.ioloop.manager import IOLoopKernelManager
 from jupyter_client.kernelspec import NoSuchKernel
-from jupyter_client.multikernelmanager import MultiKernelManager
+from jupyter_client.multikernelmanager import DuplicateKernelError, MultiKernelManager
 from jupyter_client.threaded import ThreadedKernelClient, ThreadedZMQSocketChannel
 from jupyter_core.paths import jupyter_data_dir
 from tornado import gen
 from traitlets.traitlets import Bool, Type
 
-from .binding import Binding, BindingConnectionError, BindingManager, BindingState
+from .binding import (
+    Binding,
+    BindingConnectionError,
+    BindingConnectionType,
+    BindingManager,
+    BindingState,
+)
 from .kernelspec import RemoteKernelSpecManager
 from .magics import BindingMagics
 from .utils import redirect_output
@@ -81,6 +87,19 @@ class HydraKernelClient(ThreadedKernelClient):
 class HydraKernelManager(IOLoopKernelManager):
     client_class = "hydra_kernel.kernel.HydraKernelClient"
 
+    binding: Binding = None
+
+    def __init__(self, *args, binding: "Binding" = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.binding = binding
+        self.post_init(binding)
+
+    def post_init(self, binding: "Binding"):
+        """A convenience function to perform post-init with a binding ref."""
+        pass
+
+
+class SSHHydraKernelManager(HydraKernelManager):
     # Tell the multi-kernel manager NOT to cache the auto-assigned ports;
     # the kernel manager will override them after launching the subkernel.
     cache_ports = False
@@ -93,15 +112,11 @@ class HydraKernelManager(IOLoopKernelManager):
         ),
     )
 
-    binding: Binding = None
-
     @property
     def needs_tunnel(self):
         return self.tunnel and not self.binding.is_local
 
-    def init_binding(self, kernel_id, binding: Binding):
-        self.binding = binding
-        self.kernel_id = kernel_id
+    def post_init(self, binding: "Binding"):
         self.kernel_spec_manager = RemoteKernelSpecManager(binding=binding)
 
     def pre_start_kernel(self, **kw):
@@ -184,6 +199,17 @@ class HydraKernelManager(IOLoopKernelManager):
         return ProcessProxy(self.binding, subkernel["pid"])
 
 
+class ZMQHydraKernelManager(HydraKernelManager):
+    def post_init(self, binding: "Binding"):
+        self.ip = binding.connection.get("host")
+        # TODO: also seed ports from the connection
+
+    def start_kernel(self, **kw):
+        # SKIP actually starting the kernel, because we know it's already started!
+        # We are just going to connect to it.
+        self.post_start_kernel(**kw)
+
+
 class ProcessProxy(object):
     def __init__(self, binding, pid):
         self.binding = binding
@@ -220,19 +246,49 @@ class ProcessProxy(object):
 
 
 class HydraMultiKernelManager(MultiKernelManager):
-    kernel_manager_class = "hydra_kernel.kernel.HydraKernelManager"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.connection_dir = HYDRA_DATA_DIR
+    connection_dir = HYDRA_DATA_DIR
 
     def pre_start_kernel(self, kernel_name, kwargs):
-        ret: "tuple[HydraKernelManager,str,str]" = super().pre_start_kernel(
-            kernel_name, kwargs
-        )
-        (km, kernel_name, kernel_id) = ret
-        km.init_binding(kernel_id, kwargs.pop("binding"))
+        # NOTE(jason): Must of this is lifted from the superclass implementation.
+        # The main reason is that we need to pass an additional keyword argument
+        # into the kernel manager factory; the superclass only allows a small
+        # set of keyword arguments through.
+
+        kernel_id = kwargs.pop("kernel_id", self.new_kernel_id(**kwargs))
+        if kernel_id in self:
+            raise DuplicateKernelError("Kernel already exists: %s" % kernel_id)
+
+        if kernel_name is None:
+            kernel_name = self.default_kernel_name
+
+        binding = kwargs.pop("binding")
+
+        km = self._create_kernel_manager(kernel_id, binding)
+        # The kernelmanager knows its ID in case it needs to spawn subkernels;
+        # tying to the parent ID makes it easier to trace ownership of subkernels.
+        km.kernel_id = kernel_id
+
         return km, kernel_name, kernel_id
+
+    def _create_kernel_manager(
+        self, kernel_id: "str", binding: "Binding"
+    ) -> "HydraKernelManager":
+        # TODO: support different kernel managers based on binding connection type
+        if binding.connection_type == BindingConnectionType.SSH:
+            km_factory = SSHHydraKernelManager
+        else:
+            raise ValueError(
+                f"No configured kernel manager for {binding.connection_type} bindings"
+            )
+
+        return km_factory(
+            connection_file=os.path.join(
+                self.connection_dir, "kernel-%s.json" % kernel_id
+            ),
+            parent=self,
+            log=self.log,
+            kernel_name=binding.kernel,
+        )
 
 
 class ProxyComms(object):

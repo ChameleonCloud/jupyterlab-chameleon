@@ -33,6 +33,10 @@ class BindingState:
     ERROR = "error"
 
 
+class BindingConnectionType:
+    SSH = "ssh"
+
+
 class BindingConnectionError(HydraException):
     _msg_fmt = "Could not connect to binding %(binding_name)s"
 
@@ -80,8 +84,26 @@ class Binding(HasTraits):
             return False
 
     @property
+    def connection_type(self):
+        return self.connection.get("type", BindingConnectionType.SSH)
+
+    @property
+    def supports_provision(self):
+        return self.supports_exec
+
+    @property
+    def supports_transfer(self):
+        return self.connection_type in [BindingConnectionType.SSH]
+
+    @property
+    def supports_exec(self):
+        return self.connection_type in [BindingConnectionType.SSH]
+
+    @property
     def virtualenv(self):
         if self.is_local:
+            return None
+        if not self.supports_exec:
             return None
         if self._virtualenv is None:
             paths = self.exec_json("jupyter --paths --json")
@@ -130,6 +152,11 @@ class Binding(HasTraits):
             tuple[int,RawIOBase,RawIOBase]: a tuple of the return code, and
                 an IO stream for captured stdout and stderr, respectively.
         """
+        if not self.supports_exec:
+            raise RuntimeError(
+                f"Exec is not supported for {self.connection_type} bindings"
+            )
+
         if isinstance(command, str):
             command = shlex.split(command)
         if self.is_local:
@@ -159,6 +186,11 @@ class Binding(HasTraits):
 
     @contextmanager
     def get_file(self, path: "str") -> "io.BytesIO":
+        if not self.supports_transfer:
+            raise RuntimeError(
+                f"File transfers not supported for {self.connection_type} bindings"
+            )
+
         with self._ssh_connect() as ssh:
             scp = SCPClient(ssh.get_transport())
             with tempfile.NamedTemporaryFile() as tmpf:
@@ -167,6 +199,11 @@ class Binding(HasTraits):
                 yield tmpf
 
     def put_file(self, local_path: "str", remote_path: "str"):
+        if not self.supports_transfer:
+            raise RuntimeError(
+                f"File transfers not supported for {self.connection_type} bindings"
+            )
+
         with self._ssh_connect() as ssh:
             scp = SCPClient(ssh.get_transport())
             scp.put(local_path, remote_path)
