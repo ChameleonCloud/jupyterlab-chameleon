@@ -79,6 +79,6 @@ class LocalKernelProxy(KernelProxy):
     def send_signal(self, signum):
         try:
             os.kill(self.pid, signum)
-            return 0
-        except:
-            return -1
+            return True
+        except OSError:
+            return False

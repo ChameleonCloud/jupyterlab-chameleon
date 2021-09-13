@@ -140,14 +140,13 @@ class HydraMultiKernelManager(MultiKernelManager):
 
 
 class KernelProxy(object):
+    poll_interval = 1
+
     def poll(self):
-        try:
-            if self.send_signal(0) != 0:
-                return 0
-        except ConnectionError:
-            LOG.warning(f"Connection error when polling subkernel {self.binding}")
-            # TODO: communicate this up to the client somehow?
-        return None
+        if self.send_signal(0):
+            return None
+        else:
+            return -1
 
     def wait(self, timeout=10):
         start = time.perf_counter()
@@ -156,13 +155,16 @@ class KernelProxy(object):
                 return
             if time.perf_counter() - start > timeout:
                 return
-            time.sleep(1)
+            time.sleep(self.poll_interval)
 
     def send_signal(self, signum):
         """Send a signal to the wrapped process.
 
         Subclasses should override this to define how the signal is sent.
         """
+        # Default handling for poll signal
+        if signum == 0:
+            return True
         raise NotImplementedError(
             "This connection type doesn't support process management"
         )

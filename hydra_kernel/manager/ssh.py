@@ -216,10 +216,10 @@ class SSHKernelProxy(KernelProxy):
     def send_signal(self, signum):
         try:
             code, _, _ = self.remote.exec(f"kill -{signum} {self.pid}")
+            return code == 0
         except BindingConnectionError as exc:
             LOG.error(f"Failed to send signal: {exc}")
-            code = -1
-        return code
+            return False
 
 
 class SSHKernelSpecManager(KernelSpecManager):
