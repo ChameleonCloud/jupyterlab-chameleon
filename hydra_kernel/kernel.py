@@ -1,294 +1,28 @@
-from functools import partial
 import logging
-import os
-import pathlib
-import shlex
-from signal import SIGKILL
-import subprocess
 import time
+from functools import partial
 import typing
 
 from ipykernel.comm import Comm
 from ipykernel.ipkernel import IPythonKernel
-from jupyter_client.channels import HBChannel
-from jupyter_client.connect import port_names, tunnel_to_kernel
-from jupyter_client.ioloop.manager import IOLoopKernelManager
-from jupyter_client.kernelspec import NoSuchKernel
-from jupyter_client.multikernelmanager import DuplicateKernelError, MultiKernelManager
-from jupyter_client.threaded import ThreadedKernelClient, ThreadedZMQSocketChannel
-from jupyter_core.paths import jupyter_data_dir
+from jupyter_client.connect import port_names
 from tornado import gen
-from traitlets.traitlets import Bool, Type
 
 from .binding import (
     Binding,
-    BindingConnectionError,
-    BindingConnectionType,
     BindingManager,
     BindingState,
 )
-from .kernelspec import RemoteKernelSpecManager
+from .manager.base import HydraMultiKernelManager
 from .magics import BindingMagics
-from .utils import redirect_output
 
 if typing.TYPE_CHECKING:
-    from jupyter_client import KernelClient, KernelManager
+    from .manager.base import HydraKernelManager, HydraKernelClient, HydraHBChannel
 
 LOG = logging.getLogger(__name__)
-HYDRA_DATA_DIR = os.path.join(jupyter_data_dir(), "hydra-kernel")
 KERNEL_HEARTBEAT_TIMEOUT = 60  # seconds
 
-pathlib.Path(HYDRA_DATA_DIR).mkdir(exist_ok=True)
-
 __version__ = "0.0.1"
-
-
-# Do some subclassing to ensure we are spawning threaded clients
-# for our proxy kernels (the default is blocking.)
-class HydraChannel(ThreadedZMQSocketChannel):
-    def __init__(self, socket, session, loop):
-        super(HydraChannel, self).__init__(socket, session, loop)
-        self._pipes = []
-
-    def call_handlers(self, msg):
-        for handler in self._pipes:
-            handler(msg)
-
-    def pipe(self, handler):
-        self._pipes.append(handler)
-
-    def unpipe(self):
-        self._pipes = []
-
-
-class HydraHBChannel(HBChannel):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._handlers = []
-
-    def call_handlers(self, since_last_heartbeat):
-        super().call_handlers(since_last_heartbeat)
-        for handler in self._handlers:
-            try:
-                handler(since_last_heartbeat)
-            except RuntimeError:
-                pass
-
-    def add_handler(self, callback):
-        self._handlers.append(callback)
-
-
-class HydraKernelClient(ThreadedKernelClient):
-    shell_channel_class = Type(HydraChannel)
-    iopub_channel_class = Type(HydraChannel)
-    hb_channel_class = Type(HydraHBChannel)
-
-
-class HydraKernelManager(IOLoopKernelManager):
-    client_class = "hydra_kernel.kernel.HydraKernelClient"
-
-    binding: Binding = None
-
-    def __init__(self, *args, binding: "Binding" = None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.binding = binding
-        self.post_init(binding)
-
-    def post_init(self, binding: "Binding"):
-        """A convenience function to perform post-init with a binding ref."""
-        pass
-
-
-class SSHHydraKernelManager(HydraKernelManager):
-    # Tell the multi-kernel manager NOT to cache the auto-assigned ports;
-    # the kernel manager will override them after launching the subkernel.
-    cache_ports = False
-
-    tunnel = Bool(
-        True,
-        help=(
-            "If set, connection to remote kernel will be established over an SSH "
-            "tunnel. Remote kernels on loopback hosts will not have tunnels."
-        ),
-    )
-
-    @property
-    def needs_tunnel(self):
-        return self.tunnel and not self.binding.is_local
-
-    def post_init(self, binding: "Binding"):
-        self.kernel_spec_manager = RemoteKernelSpecManager(binding=binding)
-
-    def pre_start_kernel(self, **kw):
-        try:
-            self.kernel_spec_manager.get_kernel_spec(self.kernel_name)
-        except NoSuchKernel:
-            LOG.info(f"No kernel found for '{self.kernel_name}', attempting install")
-            self.kernel_spec_manager.install_kernel_spec(
-                None, kernel_name=self.kernel_name
-            )
-        return super().pre_start_kernel(**kw)
-
-    def format_kernel_cmd(self, extra_arguments):
-        cmd = super().format_kernel_cmd(extra_arguments=extra_arguments)
-        cmd.append(f"--id={self.kernel_id}")
-        if self.binding.virtualenv:
-            venv_bin = os.path.join(self.binding.virtualenv, "bin")
-            cmd[0] = os.path.join(venv_bin, cmd[0])
-            cmd.append(f"--launcher={os.path.join(venv_bin, 'hydra-subkernel')}")
-
-        return cmd
-
-    def _reset_ports(self):
-        for name in port_names:
-            setattr(self, name, 0)
-
-    def _save_host_key(self, host):
-        hosts_file_path = pathlib.Path(pathlib.Path.home(), ".ssh", "known_hosts")
-        hosts_file_path.parent.mkdir(exist_ok=True)
-        hosts_file_path.touch()
-        with hosts_file_path.open("a") as hosts_file:
-            with redirect_output() as stderr:
-                proc = subprocess.run(
-                    shlex.split(f"ssh-keyscan -H {host}"),
-                    stdout=hosts_file,
-                    stderr=stderr,
-                )
-                if proc.returncode != 0:
-                    LOG.warning(
-                        (
-                            f"Failed to update host key for {host}: "
-                            f"{proc.stderr.read()}"
-                        )
-                    )
-
-    def _launch_kernel(self, kernel_cmd, **kw):
-        # The connection file has already been written as part of `pre_start_kernel`,
-        # but we are going to be overriding ports to the subkernel's exposed
-        # ports (or ports exposed via a SSH tunnel).
-        self._reset_ports()
-        self.cleanup_connection_file()
-
-        LOG.info(f"{self.binding.name}: kernel_cmd={kernel_cmd}")
-        subkernel = self.binding.exec_json(kernel_cmd)
-
-        conn_info = subkernel["connection"]
-        self.load_connection_info(conn_info)
-        LOG.info(f"{self.binding.name}: connection={conn_info}")
-
-        if self.needs_tunnel:
-            conn = self.binding.connection
-            sshkey = conn.get("ssh_private_key_file")
-            sshserver = f"{conn.get('user')}@{conn['host']}"
-
-            if not self.binding.host_key_checking:
-                self._save_host_key(conn["host"])
-
-            LOG.info(f"{self.binding.name}: tunneling to {sshserver}")
-
-            (
-                self.shell_port,
-                self.iopub_port,
-                self.stdin_port,
-                self.hb_port,
-                self.control_port,
-            ) = tunnel_to_kernel(conn_info, sshserver, sshkey=sshkey)
-
-        self.write_connection_file()
-
-        return ProcessProxy(self.binding, subkernel["pid"])
-
-
-class ZMQHydraKernelManager(HydraKernelManager):
-    def post_init(self, binding: "Binding"):
-        self.ip = binding.connection.get("host")
-        # TODO: also seed ports from the connection
-
-    def start_kernel(self, **kw):
-        # SKIP actually starting the kernel, because we know it's already started!
-        # We are just going to connect to it.
-        self.post_start_kernel(**kw)
-
-
-class ProcessProxy(object):
-    def __init__(self, binding, pid):
-        self.binding = binding
-        self.pid = pid
-
-    def poll(self):
-        try:
-            if self.send_signal(0) != 0:
-                return 0
-        except ConnectionError:
-            LOG.warning(f"Connection error when polling subkernel {self.binding}")
-            # TODO: communicate this up to the client somehow?
-        return None
-
-    def wait(self, timeout=10):
-        start = time.perf_counter()
-        while True:
-            if self.poll() is not None:
-                return
-            if time.perf_counter() - start > timeout:
-                return
-            time.sleep(1)
-
-    def send_signal(self, signum):
-        try:
-            code, _, _ = self.binding.exec(f"kill -{signum} {self.pid}")
-        except BindingConnectionError as exc:
-            LOG.error(f"{self.binding.name}: failed to send signal due to {exc}")
-            code = -1
-        return code
-
-    def kill(self):
-        return self.send_signal(SIGKILL)
-
-
-class HydraMultiKernelManager(MultiKernelManager):
-    connection_dir = HYDRA_DATA_DIR
-
-    def pre_start_kernel(self, kernel_name, kwargs):
-        # NOTE(jason): Must of this is lifted from the superclass implementation.
-        # The main reason is that we need to pass an additional keyword argument
-        # into the kernel manager factory; the superclass only allows a small
-        # set of keyword arguments through.
-
-        kernel_id = kwargs.pop("kernel_id", self.new_kernel_id(**kwargs))
-        if kernel_id in self:
-            raise DuplicateKernelError("Kernel already exists: %s" % kernel_id)
-
-        if kernel_name is None:
-            kernel_name = self.default_kernel_name
-
-        binding = kwargs.pop("binding")
-
-        km = self._create_kernel_manager(kernel_id, binding)
-        # The kernelmanager knows its ID in case it needs to spawn subkernels;
-        # tying to the parent ID makes it easier to trace ownership of subkernels.
-        km.kernel_id = kernel_id
-
-        return km, kernel_name, kernel_id
-
-    def _create_kernel_manager(
-        self, kernel_id: "str", binding: "Binding"
-    ) -> "HydraKernelManager":
-        # TODO: support different kernel managers based on binding connection type
-        if binding.connection_type == BindingConnectionType.SSH:
-            km_factory = SSHHydraKernelManager
-        else:
-            raise ValueError(
-                f"No configured kernel manager for {binding.connection_type} bindings"
-            )
-
-        return km_factory(
-            connection_file=os.path.join(
-                self.connection_dir, "kernel-%s.json" % kernel_id
-            ),
-            parent=self,
-            log=self.log,
-            kernel_name=binding.kernel,
-        )
 
 
 class ProxyComms(object):
@@ -454,14 +188,13 @@ class HydraKernel(IPythonKernel):
         # Check if binding name is valid (is there a binding set up?)
         if binding_name not in self._subkernels:
             binding.state = BindingState.CREATING
-            self.log.info(f"{binding_name}: starting sub-kernel")
+            self.log.info(f"{binding_name}: starting subkernel")
             try:
                 kernel_id: "str" = self.kernel_manager.start_kernel(
                     binding.kernel, binding=binding
                 )
             except Exception as exc:
-                self.log.error(exc)
-                self.log.error(type(exc))
+                self.log.exception(f"Failed to start subkernel for '{binding_name}'")
                 self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)
                 return
 

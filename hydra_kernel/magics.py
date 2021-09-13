@@ -34,21 +34,23 @@ class BindingMagics(Magics):
         subparsers = self.parser.add_subparsers(title="commands", dest="command")
         parser_set = subparsers.add_parser(
             "set",
-            help=("update connection or kernel parameters for a remote execution host"),
+            help=("update connection or kernel parameters for a subkernel"),
         )
-        parser_set.add_argument("name", help="name of the remote host")
-        parser_set.add_argument(
-            "--host", help="hostname, ipv4 or ipv6 address of the remote host"
-        )
-        parser_set.add_argument(
-            "--user", help="user to authenticate to host as", default=self.default_user
-        )
+        parser_set.add_argument("name", help="name of the subkernel")
         parser_set.add_argument(
             "--connection",
-            choices={"ssh"},
+            choices={"local", "ssh", "zmq"},
             help="type of connection",
             default="ssh",
             dest="connection_type",
+        )
+        parser_set.add_argument(
+            "--ssh-host", help="hostname, ipv4 or ipv6 address of the remote host"
+        )
+        parser_set.add_argument(
+            "--ssh-user",
+            help="user to authenticate to host as",
+            default=self.default_user,
         )
         parser_set.add_argument(
             "--ssh-private-key-file",
@@ -75,8 +77,8 @@ class BindingMagics(Magics):
                 args.name,
                 kernel=args.kernel,
                 connection={
-                    "host": args.host,
-                    "user": args.user,
+                    "host": args.ssh_host,
+                    "user": args.ssh_user,
                     "type": args.connection_type,
                     "ssh_private_key_file": args.ssh_private_key_file,
                 },
