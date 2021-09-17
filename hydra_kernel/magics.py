@@ -39,7 +39,7 @@ class BindingMagics(Magics):
         parser_set.add_argument("name", help="name of the subkernel")
         parser_set.add_argument(
             "--connection",
-            choices={"local", "ssh", "zmq"},
+            choices={"local", "ssh", "zun"},
             help="type of connection",
             default="ssh",
             dest="connection_type",
@@ -56,6 +56,7 @@ class BindingMagics(Magics):
             "--ssh-private-key-file",
             help="private key file to authenticate to host with",
         )
+        parser_set.add_argument("--zun-container", help="container UUID")
         parser_set.add_argument("--kernel", choices=Binding.kernel.values)
 
         parser_list = subparsers.add_parser(
@@ -73,15 +74,25 @@ class BindingMagics(Magics):
         if not args.command:
             return
         if args.command == "set":
+            connection = {"type": args.connection_type}
+            if args.connection_type == "ssh":
+                connection.update(
+                    {
+                        "host": args.ssh_host,
+                        "user": args.ssh_user,
+                        "ssh_private_key_file": args.ssh_private_key_file,
+                    }
+                )
+            else:
+                connection.update(
+                    {
+                        "container_uuid": args.zun_container,
+                    }
+                )
             self.binding_manager.set(
                 args.name,
                 kernel=args.kernel,
-                connection={
-                    "host": args.ssh_host,
-                    "user": args.ssh_user,
-                    "type": args.connection_type,
-                    "ssh_private_key_file": args.ssh_private_key_file,
-                },
+                connection=connection,
             )
         elif args.command == "list":
             print("\n".join(str(binding) for binding in self.binding_manager.list()))

@@ -23,7 +23,7 @@ class BindingState:
 class BindingConnectionType:
     LOCAL = "local"
     SSH = "ssh"
-    ZMQ = "zmq"
+    ZUN = "zun"
 
 
 class BindingConnectionError(HydraException):

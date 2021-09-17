@@ -25,15 +25,14 @@ LOG = logging.getLogger(__name__)
 
 
 class LocalHydraKernelManager(HydraKernelManager):
-    @property
-    def kernel_cmd(self):
-        return [
+    def _launch_kernel(self, _, **kw):
+        # Override the kernel command; we need to spawn a background kernel
+        # which requires using the agent wrapper.
+        kernel_cmd = [
             "hydra-agent",
             f"--kernel={self.binding.kernel}",
             f"--id={self.kernel_id}",
         ]
-
-    def _launch_kernel(self, kernel_cmd, **kw):
         # The connection file has already been written as part of `pre_start_kernel`,
         # but we are going to be overriding ports to the subkernel's exposed
         # ports (or ports exposed via a SSH tunnel).

@@ -29,9 +29,9 @@ def kernel_manager_factory(binding: "Binding"):
         from .local import LocalHydraKernelManager
 
         return LocalHydraKernelManager
-    elif binding.connection_type == BindingConnectionType.ZMQ:
-        from .zmq import ZMQHydraKernelManager
+    elif binding.connection_type == BindingConnectionType.ZUN:
+        from .zun import ZunHydraKernelManager
 
-        return ZMQHydraKernelManager
+        return ZunHydraKernelManager
     else:
         raise ValueError("Unsupported connection type")

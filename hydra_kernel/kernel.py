@@ -6,7 +6,6 @@ import typing
 from ipykernel.comm import Comm
 from ipykernel.ipkernel import IPythonKernel
 from jupyter_client.connect import port_names
-from tornado import gen
 
 from .binding import (
     Binding,
@@ -169,12 +168,12 @@ class HydraKernel(IPythonKernel):
     def banner(self):
         return "Hydra"
 
-    @gen.coroutine
-    def execute_request(self, stream, ident, parent):
+    async def execute_request(self, stream, ident, parent):
         binding_name = parent["metadata"].get("chameleon.binding_name")
 
         if not binding_name:
-            return super(HydraKernel, self).execute_request(stream, ident, parent)
+            await super(HydraKernel, self).execute_request(stream, ident, parent)
+            return
 
         binding = self.binding_manager.get(binding_name)
 
@@ -244,7 +243,7 @@ class HydraKernel(IPythonKernel):
         kc.iopub_channel.unpipe()
 
         if not silent and proxy.reply_content["status"] == "error" and stop_on_error:
-            yield self._abort_queues()
+            await self._abort_queues()
 
     def on_subkernel_ports_changed(self, change):
         km: "HydraKernelManager" = change["owner"]
