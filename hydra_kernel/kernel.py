@@ -24,6 +24,11 @@ KERNEL_HEARTBEAT_TIMEOUT = 60  # seconds
 __version__ = "0.0.1"
 
 
+def to_camel_case(input: "str"):
+    parts: "list[str]" = input.split("_")
+    return parts[0] + "".join([p.title() for p in parts[1:]])
+
+
 class ProxyComms(object):
     def __init__(self, session, ident=None, parent=None, iopub=None, shell=None):
         self.session = session
@@ -134,7 +139,10 @@ class HydraKernel(IPythonKernel):
 
     def on_binding_change(self, binding: "Binding", change: "dict"):
         if self._comm:
-            self._comm.send({"event": "binding_update", "binding": binding.as_dict()})
+            binding_payload = {
+                to_camel_case(key): value for key, value in binding.as_dict().items()
+            }
+            self._comm.send({"event": "binding_update", "binding": binding_payload})
 
     def on_binding_remove(self, binding: "Binding"):
         try:

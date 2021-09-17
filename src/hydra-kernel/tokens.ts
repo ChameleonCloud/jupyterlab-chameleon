@@ -5,6 +5,8 @@ import { Token } from '@lumino/coreutils';
 
 export interface IBindingModel {
   readonly name: string;
+  readonly kernel?: string;
+  readonly mimeType?: string;
   readonly connection: IBindingModel.IConnection;
   readonly state:
     | 'connected'

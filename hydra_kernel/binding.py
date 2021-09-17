@@ -1,6 +1,6 @@
 import logging
 
-from traitlets.traitlets import Dict, Enum, HasTraits, Unicode
+from traitlets.traitlets import Dict, Enum, HasTraits, Unicode, default
 
 from hydra_kernel.exception import HydraException
 
@@ -8,6 +8,10 @@ LOG = logging.getLogger(__name__)
 
 DEFAULT_KERNEL = "bash"
 SUPPORTED_KERNELS = ("bash", "python")
+MIME_TYPES = {
+    "bash": "shell",
+    "python": "python",
+}
 
 
 # TODO: figure out how to properly integrate this into enum.Enum and
@@ -33,6 +37,7 @@ class BindingConnectionError(HydraException):
 class Binding(HasTraits):
     name = Unicode(read_only=True)
     kernel = Enum(SUPPORTED_KERNELS, default_value=DEFAULT_KERNEL)
+    mime_type = Unicode()
     connection = Dict()
     state = Enum(
         [
@@ -59,6 +64,10 @@ class Binding(HasTraits):
                 "\n".join(conn_info),
             ]
         )
+
+    @default("mime_type")
+    def _default_mime_type(self):
+        return MIME_TYPES.get(self.kernel, "unknown")
 
     @property
     def connection_type(self):

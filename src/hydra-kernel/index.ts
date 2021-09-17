@@ -171,8 +171,9 @@ namespace Private {
     );
 
     if (indexOf > -1) {
+      const binding = bindings.get(indexOf);
       widget.addClass(CELL_CLASSES[indexOf % CELL_CLASSES.length]);
-      widget.editor.model.mimeType = 'shell';
+      widget.editor.model.mimeType = binding.mimeType || 'shell';
     } else {
       widget.editor.model.mimeType = 'python';
     }
