@@ -24,6 +24,7 @@ import {
   TranslationBundle
 } from '@jupyterlab/translation';
 import { toArray } from '@lumino/algorithm';
+import { ellipsesIcon } from '@jupyterlab/ui-components';
 import { SingletonLayout, Widget } from '@lumino/widgets';
 import * as React from 'react';
 import { IBindingModel, IBindingRegistry } from './tokens';
@@ -221,6 +222,9 @@ function BindingStatus(props: BindingStatus.IProps) {
     <div className="chi-Binding">
       <div className="chi-Binding-name">{props.binding.name}</div>
       <span className={`chi-BindingState-${props.binding.state}`}>
+        {props.binding.state === 'creating' && (
+          <ellipsesIcon.react tag="span"></ellipsesIcon.react>
+        )}
         {props.binding.state}
       </span>
       <div className="chi-BindingConnection">{hostDisplay}</div>

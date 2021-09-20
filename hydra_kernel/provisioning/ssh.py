@@ -35,7 +35,7 @@ from ..utils import redirect_output
 from .base import HydraKernelProvisioner
 
 if typing.TYPE_CHECKING:
-    from typing import Any, Dict, List
+    from typing import Any, Dict, List, Optional
 
 LOG = logging.getLogger(__name__)
 DEFAULT_SSH_TIMEOUT = 10
@@ -75,7 +75,7 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
     @property
     def virtualenv(self):
         if self._virtualenv is None:
-            paths = SSHConnection(self.binding).exec_json("jupyter --paths --json")
+            paths = self.connection.exec_json("jupyter --paths --json")
             self._virtualenv = os.path.join(paths["data"][0], "hydra-kernel", "venv")
         return self._virtualenv
 
@@ -100,6 +100,12 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
 
     async def pre_launch(self, **kwargs: "Any") -> "Dict[str, Any]":
         kwargs = await super().pre_launch(**kwargs)
+
+        if not self.host_key_checking:
+            self._save_host_key(self.host)
+
+        self.connection = SSHConnection(parent=self)
+
         venv_bin = os.path.join(self.virtualenv, "bin")
         kwargs["cmd"] = [
             os.path.join(venv_bin, "hydra-agent"),
@@ -115,11 +121,6 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
         return kwargs
 
     async def launch_kernel(self, command, **kwargs):
-        if not self.host_key_checking:
-            self._save_host_key(self.host)
-
-        self.connection = SSHConnection(parent=self)
-
         LOG.info(f"{self.binding.name}: kernel_cmd={command}")
         subkernel = self.connection.exec_json(command)
         conn_info = subkernel["connection"]
@@ -151,6 +152,12 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
             self.connection.exec(f"kill -{signum} {self.pid}")
         except BindingConnectionError as exc:
             LOG.error(f"Failed to send signal: {exc}")
+
+    async def poll(self) -> "Optional[int]":
+        try:
+            self.connection.exec(f"kill -0 {self.pid}")
+        except OSError:
+            return -1
 
     async def has_remote_kernelspec(self, kernel_name):
         if not self._kernelspecs:
