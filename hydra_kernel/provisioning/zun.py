@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import argparse
+import asyncio
 import io
 import json
+import logging
 import operator
 import os
 import signal
@@ -22,11 +24,14 @@ import typing
 
 from keystoneauth1 import loading
 from keystoneauth1.adapter import Adapter
+from traitlets.traitlets import Unicode
 
-from .base import HydraKernelManager, KernelProxy
+from .base import HydraKernelProvisioner
 
 if typing.TYPE_CHECKING:
-    from ..binding import Binding
+    from typing import Any, Dict, List, Optional
+
+LOG = logging.getLogger(__name__)
 
 
 def keystone_session():
@@ -42,6 +47,8 @@ def keystone_session():
 
 
 class ZunClient(object):
+    RESTART_TIMEOUT = 15  # seconds
+
     def __init__(self, session, container_uuid=None):
         self._uuid = container_uuid
         self._session = Adapter(
@@ -102,31 +109,67 @@ class ZunClient(object):
         container = self.get_container()
         return container["status"] == "Running"
 
+    async def restart_container(self, timeout: "int" = None):
+        if timeout is None:
+            timeout = self.RESTART_TIMEOUT
+
+        self._session.post(f"/containers/{self._uuid}/reboot")
+
+        async def _until_running():
+            while not self.is_container_running():
+                await asyncio.sleep(1.0)
+
+        await asyncio.wait_for(_until_running(), float(timeout))
+
     def kill_container(self, signum=signal.SIGKILL):
         return self._session.post(f"/containers/{self._uuid}/kill?signal={int(signum)}")
 
 
-class ZunHydraKernelManager(HydraKernelManager):
-    def post_init(self, binding: "Binding"):
+class ZunHydraKernelProvisioner(HydraKernelProvisioner):
+    container_uuid = Unicode()
+
+    poll_interval = 5.0
+
+    @property
+    def has_process(self) -> bool:
+        return self.zun is not None
+
+    async def poll(self) -> "Optional[int]":
+        if not self.zun.is_container_running():
+            return -1
+
+    async def send_signal(self, signum: "int") -> None:
+        self.zun.kill_container(signum)
+
+    async def pre_launch(self, **kwargs: "Any") -> "Dict[str, Any]":
+        kwargs = await super().pre_launch(**kwargs)
         session = keystone_session()
         self.neutron = Adapter(
             session=session,
             service_type="network",
             interface="public",
         )
-        container_uuid = binding.connection.get("container_uuid")
-        if not container_uuid:
+        if not self.container_uuid:
             raise ValueError("Missing container UUID")
-        self.zun = ZunClient(session, container_uuid=container_uuid)
 
-    def _launch_kernel(self, kernel_cmd, **kw):
-        # The connection file has already been written as part of `pre_start_kernel`,
-        # but we are going to be overriding ports to the subkernel's exposed
-        # ports.
-        self.reset_ports()
-        self.cleanup_connection_file()
+        self.zun = ZunClient(session, container_uuid=self.container_uuid)
 
-        # Try to find a public IP assigned to the kernel
+        # Place some value in "cmd" even though we're not launching a kernel;
+        # other code nevertheless assumes this will have some value
+        kwargs["cmd"] = [
+            "echo",
+            "The Zun provisioner does not support the kernel 'cmd' argument.",
+        ]
+
+        # TODO: possibly attempt to start the container if it is stopped/created
+
+        return kwargs
+
+    async def launch_kernel(
+        self, command: "List[str]", **kwargs: "Any"
+    ) -> "KernelConnectionInfo":
+        if not self.zun.is_container_running():
+            await self.zun.restart_container()
 
         container = self.zun.get_container()
         container_ports = [
@@ -148,28 +191,10 @@ class ZunHydraKernelManager(HydraKernelManager):
 
         # Read kernel connection file
         conn_info = self.zun.get_client_connection_info()
-        self.load_connection_info(conn_info)
+        conn_info["ip"] = container_fip["floating_ip_address"]
 
-        # Rewrite connection IP to floating IP
-        self.ip = container_fip["floating_ip_address"]
+        return conn_info
 
-        self.write_connection_file()
-
-        return ZunKernelProxy(zun_client=self.zun)
-
-
-class ZunKernelProxy(KernelProxy):
-    # Don't check so often that the kernel is down
-    poll_interval = 30
-
-    def __init__(self, zun_client: "ZunClient" = None) -> None:
-        self.zun = zun_client
-
-    def send_signal(self, signum):
-        if signum == 0:
-            # Just check if container active
-            return self.zun.is_container_running()
-        else:
-            # Send kill signal
-            self.zun.post(f"/containers/{self.container_uuid}/kill?signal={signum}")
-            return True
+    def get_shutdown_wait_time(self, recommended: float = 5) -> float:
+        # Allow containers to take upwards of 30 seconds to tear down
+        return max(recommended, 30.0)

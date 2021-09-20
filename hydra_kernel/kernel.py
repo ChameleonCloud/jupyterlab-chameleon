@@ -1,6 +1,7 @@
 import logging
 import time
 from functools import partial
+import signal
 import typing
 
 from ipykernel.comm import Comm
@@ -12,11 +13,11 @@ from .binding import (
     BindingManager,
     BindingState,
 )
-from .manager.base import HydraMultiKernelManager
+from .manager import HydraMultiKernelManager
 from .magics import BindingMagics
 
 if typing.TYPE_CHECKING:
-    from .manager.base import HydraKernelManager, HydraKernelClient, HydraHBChannel
+    from .manager import HydraKernelManager, HydraKernelClient, HydraHBChannel
 
 LOG = logging.getLogger(__name__)
 KERNEL_HEARTBEAT_TIMEOUT = 60  # seconds
@@ -237,12 +238,28 @@ class HydraKernel(IPythonKernel):
         kc.iopub_channel.pipe(proxy.on_iopub_message)
         kc.shell_channel.pipe(proxy.on_shell_message)
         msg = kc.session.msg("execute_request", content)
-        kc.shell_channel.send(msg)
 
-        # This will effectively block, but perhaps that is a good thing.
-        # Without blocking, it seems to allow multiple cells to execute in parallel.
-        while not proxy.reply_content:
-            time.sleep(0.1)
+        orig_handler = None
+
+        def handle_sigint(signum, frame):
+            # First proxy signal to subkernel, then run original handler
+            try:
+                km.signal_kernel(signum)
+            except RuntimeError as exc:
+                LOG.error(km.is_alive())
+                LOG.error(f"Failed to interrupt subkernel {binding_name}: {exc}")
+            orig_handler(signum, frame)
+
+        orig_handler = signal.signal(signal.SIGINT, handle_sigint)
+
+        try:
+            kc.shell_channel.send(msg)
+            # This will effectively block, but perhaps that is a good thing.
+            # Without blocking, it seems to allow multiple cells to execute in parallel.
+            while not proxy.reply_content:
+                time.sleep(0.1)
+        finally:
+            signal.signal(signal.SIGINT, orig_handler)
 
         # Ensure there's nothing that still needs to be proxied and cleanup.
         kc.shell_channel.flush()

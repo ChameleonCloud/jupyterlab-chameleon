@@ -18,32 +18,41 @@ import os
 import shlex
 import subprocess
 import tempfile
+import typing
 
-from .base import HydraKernelManager, KernelProxy
+from .base import HydraKernelProvisioner
+
+if typing.TYPE_CHECKING:
+    from typing import Any, Dict, List, Optional
 
 LOG = logging.getLogger(__name__)
 
 
-class LocalHydraKernelManager(HydraKernelManager):
-    def _launch_kernel(self, _, **kw):
+class LocalHydraKernelProvisioner(HydraKernelProvisioner):
+    poll_interval = 0.1  # Checking local processes is cheap
+
+    pid = None
+
+    @property
+    def has_process(self) -> bool:
+        return self.pid is not None
+
+    def reset(self):
+        self.pid = None
+
+    async def pre_launch(self, **kwargs: "Any") -> "Dict[str, Any]":
+        kwargs = await super().pre_launch(**kwargs)
         # Override the kernel command; we need to spawn a background kernel
         # which requires using the agent wrapper.
-        kernel_cmd = [
+        kwargs["cmd"] = [
             "hydra-agent",
             f"--kernel={self.binding.kernel}",
             f"--id={self.kernel_id}",
         ]
-        # The connection file has already been written as part of `pre_start_kernel`,
-        # but we are going to be overriding ports to the subkernel's exposed
-        # ports (or ports exposed via a SSH tunnel).
-        self.reset_ports()
-        self.cleanup_connection_file()
+        return kwargs
 
-        LOG.info(f"{self.binding.name}: kernel_cmd={kernel_cmd}")
-        if isinstance(kernel_cmd, str):
-            command = shlex.split(kernel_cmd)
-        else:
-            command = [shlex.quote(arg) for arg in kernel_cmd]
+    async def launch_kernel(self, command: "List[str]", **kwargs):
+        command = [shlex.quote(arg) for arg in command]
         # In a kernel context, the STDOUT and STDERR file descriptors are
         # already piped to the iopub channel. Using `capture_output` will
         # pipe those fds again, which ends up deadlocking subprocess.run.
@@ -62,22 +71,18 @@ class LocalHydraKernelManager(HydraKernelManager):
                 raise RuntimeError(stdout.read())
             subkernel = json.load(stdout)
 
-        conn_info = subkernel["connection"]
-        self.load_connection_info(conn_info)
-        LOG.info(f"{self.binding.name}: connection={conn_info}")
+        self.pid = subkernel["pid"]
 
-        self.write_connection_file()
+        return subkernel["connection"]
 
-        return LocalKernelProxy(subkernel["pid"])
-
-
-class LocalKernelProxy(KernelProxy):
-    def __init__(self, pid):
-        self.pid = pid
-
-    def send_signal(self, signum):
+    async def send_signal(self, signum: int) -> None:
         try:
             os.kill(self.pid, signum)
-            return True
+        except ProcessLookupError:
+            self.reset()
+
+    async def poll(self) -> "Optional[int]":
+        try:
+            os.kill(self.pid, 0)
         except OSError:
-            return False
+            return -1
