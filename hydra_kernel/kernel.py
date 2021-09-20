@@ -138,12 +138,25 @@ class HydraKernel(IPythonKernel):
         self._comm.on_msg(self.on_comm_msg)
         LOG.debug(f"Registered comm channel {comm} with open request {message}")
 
+    def _binding_comm_payload(self, binding: "Binding") -> "dict":
+        def _camelify(obj):
+            out = {}
+            for key, value in obj.items():
+                if isinstance(value, dict):
+                    value = _camelify(value)
+                out[to_camel_case(key)] = value
+            return out
+
+        return _camelify(binding.as_dict())
+
     def on_binding_change(self, binding: "Binding", change: "dict"):
         if self._comm:
-            binding_payload = {
-                to_camel_case(key): value for key, value in binding.as_dict().items()
-            }
-            self._comm.send({"event": "binding_update", "binding": binding_payload})
+            self._comm.send(
+                {
+                    "event": "binding_update",
+                    "binding": self._binding_comm_payload(binding),
+                }
+            )
 
     def on_binding_remove(self, binding: "Binding"):
         try:
@@ -157,7 +170,7 @@ class HydraKernel(IPythonKernel):
             self._comm.send(
                 {
                     "event": "binding_remove",
-                    "binding": binding.as_dict(),
+                    "binding": self._binding_comm_payload(binding),
                 }
             )
 
@@ -169,7 +182,10 @@ class HydraKernel(IPythonKernel):
                 self._comm.send(
                     {
                         "event": "binding_list_reply",
-                        "bindings": [b.as_dict() for b in self.binding_manager.list()],
+                        "bindings": [
+                            self._binding_comm_payload(b)
+                            for b in self.binding_manager.list()
+                        ],
                     }
                 )
 

@@ -193,14 +193,30 @@ namespace BindingStatusList {
 
 function BindingStatus(props: BindingStatus.IProps) {
   const connection = props.binding.connection;
-  const hostDisplay = ['127.0.0.1', 'localhost'].includes(connection.host) ? (
-    <span>Local</span>
-  ) : (
-    <span>
-      Host: {connection.user && <span>{connection.user}@</span>}
-      <span>{connection.host}</span>
-    </span>
-  );
+
+  let hostDisplay;
+  let sshConnection, zunConnection;
+  switch (props.binding.connection.type) {
+    case 'local':
+      hostDisplay = <span>Local</span>;
+      break;
+    case 'ssh':
+      sshConnection = connection as IBindingModel.ISSHConnection;
+      hostDisplay = (
+        <span>
+          Host: {sshConnection.user && <span>{sshConnection.user}@</span>}
+          <span>{sshConnection.host}</span>
+        </span>
+      );
+      break;
+    case 'zun':
+      zunConnection = connection as IBindingModel.IZunConnection;
+      hostDisplay = <span>Container: {zunConnection.containerUuid}</span>;
+      break;
+    default:
+      break;
+  }
+
   return (
     <div className="chi-Binding">
       <div className="chi-Binding-name">{props.binding.name}</div>

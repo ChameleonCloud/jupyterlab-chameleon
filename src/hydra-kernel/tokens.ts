@@ -7,7 +7,10 @@ export interface IBindingModel {
   readonly name: string;
   readonly kernel?: string;
   readonly mimeType?: string;
-  readonly connection: IBindingModel.IConnection;
+  readonly connection:
+    | IBindingModel.ILocalConnection
+    | IBindingModel.ISSHConnection
+    | IBindingModel.IZunConnection;
   readonly state:
     | 'connected'
     | 'disconnected'
@@ -17,9 +20,17 @@ export interface IBindingModel {
 }
 
 export declare namespace IBindingModel {
-  interface IConnection {
+  interface ILocalConnection {
+    readonly type: 'local';
+  }
+  interface ISSHConnection {
+    readonly type: 'ssh';
     readonly host: string;
     readonly user?: string;
+  }
+  interface IZunConnection {
+    readonly type: 'zun';
+    readonly containerUuid: string;
   }
 }
 
