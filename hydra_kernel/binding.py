@@ -49,18 +49,19 @@ class Binding(HasTraits):
         ],
         default_value=BindingState.DISCONNECTED,
     )
+    progress = Dict(default_value={"progress": None, "progress_ratio": None})
 
     def __str__(self):
         conn_info = [
-            f"\t\t{key}={value}"
+            f"  {key}={value}"
             for key, value in self.connection.items()
             if value is not None
         ]
         return "\n".join(
             [
                 self.name,
-                f"\t{self.state}",
-                f"\tConnection: {self.connection_type}",
+                f" {self.state}",
+                f" Connection: {self.connection_type}",
                 "\n".join(conn_info),
             ]
         )
@@ -72,6 +73,9 @@ class Binding(HasTraits):
     @property
     def connection_type(self):
         return self.connection.get("type", BindingConnectionType.SSH)
+
+    def update_progress(self, message: "str", ratio: "float" = None):
+        self.progress = {"progress": message, "progress_ratio": ratio}
 
     def as_dict(self):
         return {
@@ -104,7 +108,12 @@ class BindingManager(object):
             self._on_change_callback(binding, change)
 
     def set(
-        self, name, kernel: "str" = None, connection: "dict" = None, state: "str" = None
+        self,
+        name,
+        kernel: "str" = None,
+        connection: "dict" = None,
+        state: "str" = None,
+        message: "str" = None,
     ):
         binding = self._binding_map.get(name)
         if not binding:

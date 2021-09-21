@@ -83,10 +83,10 @@ setup_args = dict(
     packages=setuptools.find_packages(),
     install_requires=[
         "ansible_runner",
-        "ipykernel~=6.0.0",
-        "ipython~=7.0.0",
+        "ipykernel~=6.0",
+        "ipython~=7.0",
         "jupyterlab~=3.0",
-        "jupyter_client~=7.0.0",
+        "jupyter_client~=7.0",
         "keystoneauth1",
         "paramiko",
         "scp",

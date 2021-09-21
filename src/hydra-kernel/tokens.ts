@@ -17,6 +17,12 @@ export interface IBindingModel {
     | 'interrupted'
     | 'creating'
     | 'error';
+  readonly progress: IBindingProgress;
+}
+
+export interface IBindingProgress {
+  readonly progress: string;
+  readonly progressRatio?: number;
 }
 
 export declare namespace IBindingModel {

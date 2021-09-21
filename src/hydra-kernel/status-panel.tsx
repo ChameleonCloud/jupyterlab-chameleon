@@ -24,7 +24,12 @@ import {
   TranslationBundle
 } from '@jupyterlab/translation';
 import { toArray } from '@lumino/algorithm';
-import { ellipsesIcon } from '@jupyterlab/ui-components';
+import {
+  Collapse,
+  circleIcon,
+  circleEmptyIcon,
+  offlineBoltIcon
+} from '@jupyterlab/ui-components';
 import { SingletonLayout, Widget } from '@lumino/widgets';
 import * as React from 'react';
 import { IBindingModel, IBindingRegistry } from './tokens';
@@ -170,7 +175,7 @@ class BindingStatusList extends React.Component<
   render() {
     return (
       <div className="chi-BindingStatus">
-        <div className="chi-BindingStatus-header">Active bindings</div>
+        <div className="chi-BindingStatus-header">Subkernels</div>
         {this.state.bindings.map((binding: IBindingModel) => {
           return <BindingStatus binding={binding} />;
         })}
@@ -192,48 +197,89 @@ namespace BindingStatusList {
   }
 }
 
-function BindingStatus(props: BindingStatus.IProps) {
-  const connection = props.binding.connection;
+class BindingStatus extends React.Component<
+  BindingStatus.IProps,
+  BindingStatus.IState
+> {
+  public state = {
+    isOpen: false
+  };
 
-  let hostDisplay;
-  let sshConnection, zunConnection;
-  switch (props.binding.connection.type) {
-    case 'local':
-      hostDisplay = <span>Local</span>;
-      break;
-    case 'ssh':
-      sshConnection = connection as IBindingModel.ISSHConnection;
-      hostDisplay = (
-        <span>
-          Host: {sshConnection.user && <span>{sshConnection.user}@</span>}
-          <span>{sshConnection.host}</span>
-        </span>
-      );
-      break;
-    case 'zun':
-      zunConnection = connection as IBindingModel.IZunConnection;
-      hostDisplay = <span>Container: {zunConnection.containerUuid}</span>;
-      break;
-    default:
-      break;
+  private handleClick = () => {
+    this.setState({ isOpen: !this.state.isOpen });
+  };
+
+  render() {
+    const binding = this.props.binding;
+    const connection = binding.connection;
+
+    let hostDisplay;
+    let sshConnection, zunConnection;
+    switch (binding.connection.type) {
+      case 'local':
+        hostDisplay = <span>Local</span>;
+        break;
+      case 'ssh':
+        sshConnection = connection as IBindingModel.ISSHConnection;
+        hostDisplay = (
+          <span>
+            Host: {sshConnection.user && <span>{sshConnection.user}@</span>}
+            <span>{sshConnection.host}</span>
+          </span>
+        );
+        break;
+      case 'zun':
+        zunConnection = connection as IBindingModel.IZunConnection;
+        hostDisplay = <span>Container: {zunConnection.containerUuid}</span>;
+        break;
+      default:
+        break;
+    }
+
+    const progressBarStyle = {
+      width: `${(binding.progress.progressRatio || 0.0) * 100}%`
+    };
+    const connectedStateIcon =
+      (binding.progress.progress || '').toLowerCase() === 'busy'
+        ? circleIcon
+        : circleEmptyIcon;
+    const statusIcon =
+      binding.state === 'connected' ? connectedStateIcon : offlineBoltIcon;
+
+    return (
+      <div className="chi-Binding" onClick={this.handleClick}>
+        <div className="chi-Binding-status">
+          <statusIcon.react></statusIcon.react>
+        </div>
+        <div className="chi-Binding-summary">
+          <div className="chi-Binding-name">{binding.name}</div>
+          <div className={`chi-BindingState-${binding.state}`}>
+            {binding.state}
+          </div>
+          <div className="chi-BindingState-progress">
+            {binding.progress.progress}
+            {binding.progress.progressRatio && (
+              <div className="chi-BindingState-progressBarContainer">
+                <span
+                  className="chi-BindingState-progressBar"
+                  style={progressBarStyle}
+                ></span>
+              </div>
+            )}
+          </div>
+        </div>
+        <Collapse keepChildrenMounted={true} isOpen={this.state.isOpen}>
+          <div className="chi-BindingConnection">{hostDisplay}</div>
+        </Collapse>
+      </div>
+    );
   }
-
-  return (
-    <div className="chi-Binding">
-      <div className="chi-Binding-name">{props.binding.name}</div>
-      <span className={`chi-BindingState-${props.binding.state}`}>
-        {props.binding.state === 'creating' && (
-          <ellipsesIcon.react tag="span"></ellipsesIcon.react>
-        )}
-        {props.binding.state}
-      </span>
-      <div className="chi-BindingConnection">{hostDisplay}</div>
-    </div>
-  );
 }
-
 namespace BindingStatus {
   export interface IProps {
     readonly binding: IBindingModel;
+  }
+  export interface IState {
+    isOpen: boolean;
   }
 }

@@ -135,6 +135,15 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
     console.debug('Got message: ', data);
     const { event } = data || {};
 
+    function locateBinding(): [IBindingModel, number] {
+      const binding = (data.binding as unknown) as IBindingModel;
+      const bindingIndex = findIndex(
+        tracker.bindings.iter(),
+        ({ name }, _) => name === binding.name
+      );
+      return [binding, bindingIndex];
+    }
+
     let binding: IBindingModel = null;
     let bindingIndex = -1;
     switch (event) {
@@ -143,11 +152,7 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
         tracker.bindings.pushAll((data.bindings as unknown) as IBindingModel[]);
         break;
       case 'binding_update':
-        binding = (data.binding as unknown) as IBindingModel;
-        bindingIndex = findIndex(
-          tracker.bindings.iter(),
-          ({ name }, _) => name === binding.name
-        );
+        [binding, bindingIndex] = locateBinding();
         if (bindingIndex > -1) {
           tracker.bindings.set(bindingIndex, binding);
         } else {
@@ -155,11 +160,7 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
         }
         break;
       case 'binding_remove':
-        binding = (data.binding as unknown) as IBindingModel;
-        bindingIndex = findIndex(
-          tracker.bindings.iter(),
-          ({ name }, _) => name === binding.name
-        );
+        [binding, bindingIndex] = locateBinding();
         if (bindingIndex > -1) {
           tracker.bindings.remove(bindingIndex);
         }

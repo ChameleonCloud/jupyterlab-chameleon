@@ -210,7 +210,7 @@ const statusPlugin: JupyterFrontEndPlugin<void> = {
       translator
     );
     widget.title.icon = offlineBoltIcon;
-    widget.title.caption = trans.__('Hydra Bindings');
+    widget.title.caption = trans.__('Hydra Subkernels');
     widget.id = 'chi-hydra-bindings';
     labshell.add(widget, 'right', { rank: 100 });
     if (restorer) {

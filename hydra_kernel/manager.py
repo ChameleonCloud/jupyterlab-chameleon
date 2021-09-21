@@ -14,6 +14,7 @@
 import logging
 import os
 import pathlib
+import typing
 
 from jupyter_client.channels import HBChannel
 from jupyter_client.ioloop.manager import IOLoopKernelManager
@@ -24,6 +25,9 @@ from traitlets.traitlets import Instance, Type, default
 
 from .binding import Binding
 from .kernelspec import HydraKernelSpecManager
+
+if typing.TYPE_CHECKING:
+    from typing import Callable
 
 LOG = logging.getLogger(__name__)
 HYDRA_DATA_DIR = os.path.join(jupyter_data_dir(), "hydra-kernel")

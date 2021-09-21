@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import pathlib
+import re
 import shlex
 import subprocess
 import sys
@@ -60,7 +61,6 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
     )
     pid = Int(allow_none=True)
 
-    _virtualenv = None
     _kernelspecs = None
 
     @property
@@ -71,13 +71,6 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
         self.connection = None
         self.pid = None
         self._kernelspecs = None
-
-    @property
-    def virtualenv(self):
-        if self._virtualenv is None:
-            paths = self.connection.exec_json("jupyter --paths --json")
-            self._virtualenv = os.path.join(paths["data"][0], "hydra-kernel", "venv")
-        return self._virtualenv
 
     def _save_host_key(self, host):
         hosts_file_path = pathlib.Path(pathlib.Path.home(), ".ssh", "known_hosts")
@@ -92,35 +85,32 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
                 )
                 if proc.returncode != 0:
                     LOG.warning(
-                        (
-                            f"Failed to update host key for {host}: "
-                            f"{proc.stderr.read()}"
-                        )
+                        (f"Failed to update host key for {host}: {stderr.read()}")
                     )
 
     async def pre_launch(self, **kwargs: "Any") -> "Dict[str, Any]":
         kwargs = await super().pre_launch(**kwargs)
 
-        if not self.host_key_checking:
-            self._save_host_key(self.host)
-
         self.connection = SSHConnection(parent=self)
 
-        venv_bin = os.path.join(self.virtualenv, "bin")
+        # Check if desired kernel exists on remote
+        self.binding.update_progress("Checking host kernels")
+        if not await self.has_remote_kernelspec(self.subkernel_name):
+            self.binding.update_progress(f"Installing {self.subkernel_name} kernel")
+            await self.provision_remote_kernelspec(self.subkernel_name)
+
         kwargs["cmd"] = [
-            os.path.join(venv_bin, "hydra-agent"),
+            "hydra-agent",
             f"--kernel={self.subkernel_name}",
             f"--id={self.kernel_id}",
-            f"--launcher={os.path.join(venv_bin, 'hydra-subkernel')}",
+            f"--launcher=hydra-subkernel",
         ]
-
-        # Check if desired kernel exists on remote
-        if not await self.has_remote_kernelspec(self.subkernel_name):
-            await self.provision_remote_kernelspec(self.subkernel_name)
 
         return kwargs
 
     async def launch_kernel(self, command, **kwargs):
+        self.binding.update_progress("Establishing secure connection")
+
         LOG.info(f"{self.binding.name}: kernel_cmd={command}")
         subkernel = self.connection.exec_json(command)
         conn_info = subkernel["connection"]
@@ -164,13 +154,13 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
             LOG.info(f"Fetching all kernel specs for '{self.binding.name}'")
             try:
                 self._kernelspecs = self.connection.exec_json(
-                    "jupyter kernelspec list --json"
+                    "jupyter kernelspec list --json --log-level ERROR"
                 )["kernelspecs"]
             except RuntimeError as exc:
                 LOG.warn((f"Failed to list kernel specs on {self.binding.name}: {exc}"))
 
         # TODO: also check languages?
-        return kernel_name in self._kernelspecs
+        return self._kernelspecs and kernel_name in self._kernelspecs
 
     async def provision_remote_kernelspec(self, kernel_name):
         ansible_dir = os.path.join(sys.prefix, "share", "hydra-kernel", "ansible")
@@ -204,7 +194,9 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
         self._kernelspecs = None
 
     def _on_ansible_event(self, event):
-        LOG.debug(f"ansible event: {event}")
+        current_task = event.get("event_data", {}).get("task")
+        if current_task:
+            self.binding.update_progress(current_task)
 
 
 class SSHConnection(object):
@@ -231,8 +223,51 @@ class SSHConnection(object):
         if isinstance(command, str):
             command = shlex.split(command)
         with self._ssh_connect() as ssh:
-            _, stdout, stderr = ssh.exec_command(shlex.join(command), timeout=timeout)
-            return stdout.channel.recv_exit_status(), stdout, stderr
+            chan = ssh.invoke_shell()
+            stdout = ""
+            stderr = ""
+            safe_cmd = shlex.join(command)
+            exit_cmd = "echo ::exit=$?"
+            commands = [safe_cmd, exit_cmd]
+            chan.sendall("\n".join(commands) + "\n")
+            exit_status = 0
+            while True:
+                if chan.recv_stderr_ready():
+                    stderr += chan.recv_stderr(4096).decode("utf-8")
+                if chan.recv_ready():
+                    sout = chan.recv(4096).decode("utf-8")
+                    stdout += sout
+                    if re.search("::exit=(\d+)", sout):
+                        break
+
+            proc_stdout = []
+            in_proc_out = False
+            for line in stdout.splitlines():
+                if in_proc_out:
+                    if exit_cmd in line:
+                        continue
+                    if line.startswith("::exit"):
+                        exit_status = int(line.split("=")[1])
+                        break
+                    proc_stdout.append(line)
+                elif safe_cmd in line and not line.startswith(safe_cmd):
+                    # When paramiko runs the command it will often flush it
+                    # to the buffer before the shell has the chance to start
+                    # executing it; the shell will print the command again as
+                    # part of the prompt. By ignoring a single line that is
+                    # the entire contents of the command we can edit out this
+                    # case.
+                    in_proc_out = True
+
+            LOG.debug(f"stdout={stdout}")
+            LOG.debug(f"process stdout={proc_stdout}")
+            LOG.debug(f"stderr={stderr}")
+            chan.close()
+            return (
+                exit_status,
+                io.StringIO("\n".join(proc_stdout)),
+                io.StringIO(stderr),
+            )
 
     def exec_json(self, command: "str", timeout=None) -> "typing.Union[dict,list]":
         code, stdout, stderr = self.exec(command, timeout=timeout)
@@ -256,6 +291,9 @@ class SSHConnection(object):
             RejectPolicy if parent.host_key_checking else AutoAddPolicy
         )
         try:
+            LOG.info(
+                f"connecting, host={parent.host}, user={parent.user}, key={parent.private_key_file}"
+            )
             client.connect(
                 parent.host,
                 username=parent.user,

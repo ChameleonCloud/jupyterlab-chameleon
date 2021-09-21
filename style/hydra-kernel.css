@@ -98,8 +98,13 @@
 }
 
 .chi-Binding {
+  display: flex;
   padding: 12px;
   border-bottom: 1px solid var(--jp-border-color2);
+}
+
+.chi-Binding-summary {
+  flex: 1
 }
 
 .chi-Binding-name {
@@ -109,6 +114,10 @@
 
 .chi-BindingState-disconnected {
   color: var(--jp-error-color0);
+}
+
+.chi-BindingState-progress {
+  color: var(--jp-ui-font-color2);
 }
 
 .chi-HydraBindings-content {

@@ -1,1 +1,3 @@
 ---
+- ansible.builtin.pip:
+    name: ipykernel

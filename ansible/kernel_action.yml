@@ -1,30 +1,30 @@
 ---
 - hosts: KERNEL
+  gather_facts: no
   pre_tasks:
-    - ansible.builtin.pip:
+    - name: "Installing core Jupyter libraries"
+      ansible.builtin.pip:
         name: "{{ item }}"
       loop:
         - jupyter_core
         - jupyter_client
-    - ansible.builtin.shell: "jupyter --paths --json"
-      register: jupyter_paths
-    - ansible.builtin.set_fact:
-        kernel_virtualenv: "{{ (jupyter_paths.stdout | from_json).data[0] }}/hydra-kernel/venv"
-    - ansible.builtin.file:
-        name: "{{ kernel_virtualenv }}/bin"
-        state: directory
-    # Mostly installing this to trigger virtualenv creation, so we can
-    # install some other custom binaries there.
-    - ansible.builtin.pip:
-        name: ipykernel
-        virtualenv: "{{ kernel_virtualenv }}"
-    - ansible.builtin.copy:
+    - name: "Finding Python path"
+      ansible.builtin.shell: which python
+      register: python_path
+    - name: "Finding Python path"
+      set_fact:
+        install_path: "{{ python_path.stdout | dirname }}"
+    - name: "Installing subkernel agents"
+      become: yes
+      ansible.builtin.copy:
         src: bin/hydra-agent
-        dest: "{{ kernel_virtualenv }}/bin/hydra-agent"
+        dest: "{{ install_path }}/hydra-agent"
         mode: preserve
-    - ansible.builtin.copy:
+    - name: "Installing subkernel agents"
+      become: yes
+      ansible.builtin.copy:
         src: bin/hydra-subkernel
-        dest: "{{ kernel_virtualenv }}/bin/hydra-subkernel"
+        dest: "{{ install_path }}/hydra-subkernel"
         mode: preserve
   roles:
     - "{{ kernel_name }}"

@@ -80,7 +80,7 @@ class BindingMagics(Magics):
                     {
                         "host": args.ssh_host,
                         "user": args.ssh_user,
-                        "ssh_private_key_file": args.ssh_private_key_file,
+                        "private_key_file": args.ssh_private_key_file,
                     }
                 )
             else:

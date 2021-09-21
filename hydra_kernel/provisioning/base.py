@@ -6,6 +6,7 @@ from jupyter_client.provisioning import KernelProvisionerBase
 from traitlets.traitlets import Float, Unicode
 
 if typing.TYPE_CHECKING:
+    from ..binding import Binding
     from ..manager import HydraKernelManager
     from typing import Optional
 
@@ -16,7 +17,7 @@ class HydraKernelProvisioner(KernelProvisionerBase):
     poll_interval = Float(1.0)
 
     @property
-    def binding(self):
+    def binding(self) -> "Binding":
         km: "HydraKernelManager" = self.parent
         assert hasattr(km, "binding")
         return km.binding

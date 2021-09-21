@@ -1,7 +1,8 @@
+import asyncio
 import logging
-import time
 from functools import partial
 import signal
+import time
 import typing
 
 from ipykernel.comm import Comm
@@ -18,6 +19,7 @@ from .magics import BindingMagics
 
 if typing.TYPE_CHECKING:
     from .manager import HydraKernelManager, HydraKernelClient, HydraHBChannel
+    from typing import Callable
 
 LOG = logging.getLogger(__name__)
 KERNEL_HEARTBEAT_TIMEOUT = 60  # seconds
@@ -220,7 +222,8 @@ class HydraKernel(IPythonKernel):
             except Exception as exc:
                 self.log.exception(f"Failed to start subkernel for '{binding_name}'")
                 self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)
-                await self._abort_queues()
+                if not silent and stop_on_error:
+                    await self._abort_queues()
                 return
 
             km: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
@@ -265,8 +268,10 @@ class HydraKernel(IPythonKernel):
             except RuntimeError as exc:
                 LOG.error(km.is_alive())
                 LOG.error(f"Failed to interrupt subkernel {binding_name}: {exc}")
+            binding.update_progress("Idle")
             orig_handler(signum, frame)
 
+        binding.update_progress("Busy")
         orig_handler = signal.signal(signal.SIGINT, handle_sigint)
 
         try:
@@ -274,6 +279,13 @@ class HydraKernel(IPythonKernel):
             # This will effectively block, but perhaps that is a good thing.
             # Without blocking, it seems to allow multiple cells to execute in parallel.
             while not proxy.reply_content:
+                # NOTE: it is very tempting to put asyncio.sleep here, but
+                # this leads to some very strange errors, probably due to the
+                # complexity of all the nested async event loops and things
+                # going on b/w Tornado and the Jupyter kernel infrastructure.
+                # Leaving this a spin loop unfortunately is the most reliable
+                # solution until we can investigate further (look at how newer
+                # kernel module uses an awaitable `reply_content`).
                 time.sleep(0.1)
         finally:
             signal.signal(signal.SIGINT, orig_handler)
@@ -283,6 +295,7 @@ class HydraKernel(IPythonKernel):
         kc.shell_channel.unpipe()
         kc.iopub_channel.flush()
         kc.iopub_channel.unpipe()
+        binding.update_progress("Idle")
 
         if not silent and proxy.reply_content["status"] == "error" and stop_on_error:
             await self._abort_queues()

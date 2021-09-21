@@ -169,8 +169,10 @@ class ZunHydraKernelProvisioner(HydraKernelProvisioner):
         self, command: "List[str]", **kwargs: "Any"
     ) -> "KernelConnectionInfo":
         if not self.zun.is_container_running():
+            self.binding.update_progress("Restarting container")
             await self.zun.restart_container()
 
+        self.binding.update_progress("Checking container")
         container = self.zun.get_container()
         container_ports = [
             addr["port"]
@@ -192,6 +194,7 @@ class ZunHydraKernelProvisioner(HydraKernelProvisioner):
         # Read kernel connection file
         conn_info = self.zun.get_client_connection_info()
         conn_info["ip"] = container_fip["floating_ip_address"]
+        self.binding.update_progress("Ready")
 
         return conn_info
 
