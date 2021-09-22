@@ -180,6 +180,24 @@ class HydraKernel(IPythonKernel):
         payload = message.get("content", {}).get("data", {})
         LOG.info(f"Got message: {payload}")
         if payload["event"] == "binding_list_request":
+            # Attempt to restore bindings set as part of initialization from
+            # kernel client.
+            if not self.binding_manager.list():
+                for binding in payload.get("bindings", []):
+                    binding_name = binding.get("name")
+                    connection = binding.get("connection", {})
+                    if not (binding_name and connection):
+                        self.log.error(
+                            f"Failed to restore malformed binding: {binding}"
+                        )
+                        continue
+                    self.binding_manager.set(
+                        binding["name"],
+                        connection=binding["connection"],
+                        kernel=binding.get("kernel"),
+                        state=BindingState.DISCONNECTED,
+                    )
+
             if self._comm:
                 self._comm.send(
                     {

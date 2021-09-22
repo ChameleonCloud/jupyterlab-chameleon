@@ -42,6 +42,12 @@ LOG = logging.getLogger(__name__)
 DEFAULT_SSH_TIMEOUT = 10
 
 
+def _expand_path(path):
+    if not path:
+        return None
+    return str(pathlib.Path(path).expanduser().resolve())
+
+
 class SSHHydraKernelProvisioner(HydraKernelProvisioner):
     host = Unicode()
     user = Unicode()
@@ -118,13 +124,9 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
 
         sshserver = f"{self.user}@{self.host}"
         LOG.info(f"{self.binding.name}: tunneling to {sshserver}")
-        (
-            shell_port,
-            iopub_port,
-            stdin_port,
-            hb_port,
-            control_port,
-        ) = tunnel_to_kernel(conn_info, sshserver, sshkey=self.private_key_file)
+        (shell_port, iopub_port, stdin_port, hb_port, control_port,) = tunnel_to_kernel(
+            conn_info, sshserver, sshkey=_expand_path(self.private_key_file)
+        )
 
         conn_info["ip"] = "127.0.0.1"
         conn_info["shell_port"] = shell_port
@@ -173,7 +175,7 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
             "ansible_host": self.host,
             "ansible_user": self.user,
             "ansible_become": self.sudo,
-            "ansible_ssh_private_key_file": self.private_key_file,
+            "ansible_ssh_private_key_file": _expand_path(self.private_key_file),
             # TODO: handle "via"
         }
 
@@ -319,7 +321,7 @@ class SSHConnection(object):
             client.connect(
                 parent.host,
                 username=parent.user,
-                key_filename=parent.private_key_file,
+                key_filename=_expand_path(parent.private_key_file),
                 timeout=parent.timeout,
             )
         except NoValidConnectionsError as exc:

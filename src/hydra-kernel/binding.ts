@@ -17,12 +17,12 @@ import { KernelMessage } from '@jupyterlab/services';
 import {
   ConnectionStatus,
   IComm,
-  IKernelConnection,
-  Status
+  IKernelConnection
 } from '@jupyterlab/services/lib/kernel/kernel';
 import { IDisposable } from '@lumino/disposable';
 import { IBindingModel, IBindingRegistry } from './tokens';
 import { findIndex } from '@lumino/algorithm';
+import { JSONArray } from '@lumino/coreutils';
 
 const COMM_CHANNEL = 'hydra';
 
@@ -33,7 +33,10 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
     this.isDisposed = true;
   }
 
-  register(kernel: IKernelConnection): IObservableList<IBindingModel> {
+  register(
+    kernel: IKernelConnection,
+    initialBindings: IBindingModel[]
+  ): IObservableList<IBindingModel> {
     if (this._bindings.has(kernel)) {
       return this._bindings.get(kernel).bindings;
     }
@@ -55,21 +58,18 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
       _: IKernelConnection,
       status: ConnectionStatus
     ) => {
-      console.log('kernel connection status changed', status);
       if (status === 'connected') {
         if (tracker.comm) {
           tracker.comm.dispose();
         }
         tracker.comm = createComm();
-        tracker.comm.send({ event: 'binding_list_request' });
+        tracker.comm.send({
+          event: 'binding_list_request',
+          bindings: (initialBindings as unknown) as JSONArray
+        });
       }
     };
     kernel.connectionStatusChanged.connect(onKernelConnectionStatusChanged);
-
-    const onKernelStatusChanged = (_: IKernelConnection, status: Status) => {
-      console.log('kernel status changed', status);
-    };
-    kernel.statusChanged.connect(onKernelStatusChanged);
 
     const onKernelDisposed = () => {
       console.log('kernel disposed');
@@ -77,7 +77,6 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
       kernel.connectionStatusChanged.disconnect(
         onKernelConnectionStatusChanged
       );
-      kernel.statusChanged.disconnect(onKernelStatusChanged);
       this.unregister(kernel);
     };
     kernel.disposed.connect(onKernelDisposed);

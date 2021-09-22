@@ -54,7 +54,10 @@ export const IBindingRegistry = new Token<IBindingRegistry>(
 );
 
 export interface IBindingRegistry {
-  register(kernel: IKernelConnection): IObservableList<IBindingModel>;
+  register(
+    kernel: IKernelConnection,
+    initialBindings: IBindingModel[]
+  ): IObservableList<IBindingModel>;
   unregister(kernel: IKernelConnection): void;
   getBindings(kernel: IKernelConnection): IObservableList<IBindingModel>;
 }

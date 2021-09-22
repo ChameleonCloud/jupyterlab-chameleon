@@ -17,16 +17,19 @@ import { IObservableList } from '@jupyterlab/observables';
 import { IKernelConnection } from '@jupyterlab/services/lib/kernel/kernel';
 import { ITranslator } from '@jupyterlab/translation';
 import { offlineBoltIcon } from '@jupyterlab/ui-components';
-import { findIndex } from '@lumino/algorithm';
+import { findIndex, toArray } from '@lumino/algorithm';
+import { Debouncer } from '@lumino/polling';
 import { DisposableDelegate, IDisposable } from '@lumino/disposable';
 import { BindingStatusPanel } from './status-panel';
 import { IBindingRegistry, IBindingModel, ICellMetadata } from './tokens';
 import { CellMetadata } from './cell-metadata';
 import { CellBindingSwitcher } from './toolbar-extension';
 import { BindingRegistry } from './binding';
+import { ReadonlyJSONArray } from '@lumino/coreutils';
 
 // Generate class names for binding display modifiers
 const CELL_CLASSES = [...Array(10).keys()].map(n => `chi-binding-${n}`);
+const BINDING_PERSIST_INTERVAL = 1000;
 
 /**
  * A notebook widget extension that adds a button to the toolbar.
@@ -56,6 +59,34 @@ export class HydraNotebookExtension
       switcher.setHidden(!!cell && cell.model.type !== 'code');
     });
 
+    const persistBindings = new Debouncer(() => {
+      panel.model.metadata.set(
+        'hydra_bindings',
+        toArray(bindings).reduce((acc: Record<string, any>, binding) => {
+          acc[binding.name] = binding;
+          return acc;
+        }, {}) as ReadonlyJSONArray
+      );
+    }, BINDING_PERSIST_INTERVAL);
+    const fetchBindings = () => {
+      // The only reason this function is so large is to make the type engine
+      // less mad. But, we at least handle both array and object metadata
+      // syntax in case it changes b/w the two formats.
+      const storedBindings = panel.model.metadata.get('hydra_bindings');
+      let ret: IBindingModel[];
+      if (Array.isArray(storedBindings)) {
+        ret = storedBindings;
+      } else if (
+        typeof storedBindings === 'object' &&
+        storedBindings !== null
+      ) {
+        ret = (toArray(
+          Object.values(storedBindings)
+        ) as unknown) as IBindingModel[];
+      }
+      return ret;
+    };
+
     const onBindingsChanged = (
       _: IObservableList<IBindingModel>,
       changed: IObservableList.IChangedArgs<IBindingModel>
@@ -66,6 +97,7 @@ export class HydraNotebookExtension
           Private.updateCellDisplay(cellWidget, cellMetadata, bindings);
         }
       });
+      persistBindings.invoke();
       // NOTE(jason): We do NOT remove the binding metadata here even if the
       // model is removed. This is because there are many reasons why the
       // binding list could change: the kernel could be restarted for example.
@@ -82,7 +114,7 @@ export class HydraNotebookExtension
       }
       const kernel = changed.newValue;
       if (kernel) {
-        bindings = this.registry.register(changed.newValue);
+        bindings = this.registry.register(changed.newValue, fetchBindings());
         bindings.changed.connect(onBindingsChanged);
       }
     };

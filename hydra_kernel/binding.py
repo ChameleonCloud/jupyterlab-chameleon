@@ -6,7 +6,7 @@ from hydra_kernel.exception import HydraException
 
 LOG = logging.getLogger(__name__)
 
-DEFAULT_KERNEL = "bash"
+DEFAULT_KERNEL = "python"
 SUPPORTED_KERNELS = ("bash", "python")
 MIME_TYPES = {
     "bash": "shell",

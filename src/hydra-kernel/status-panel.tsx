@@ -58,7 +58,9 @@ export class BindingStatusPanel extends Widget {
 
     const node = document.createElement('div');
     const content = document.createElement('div');
-    content.textContent = this._trans.__('Not applicable.');
+    content.textContent = this._trans.__(
+      'Please select a Notebook that utilizes the Hydra kernel to see subkernel statuses.'
+    );
     content.className = 'chi-HydraBindings-placeholderContent';
     node.appendChild(content);
     this._placeholder = new Widget({ node });
