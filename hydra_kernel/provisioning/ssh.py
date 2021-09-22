@@ -25,7 +25,8 @@ import typing
 from contextlib import contextmanager
 
 import ansible_runner
-from jupyter_client.connect import tunnel_to_kernel
+from jupyter_client.connect import port_names
+from jupyter_client.ssh import tunnel
 from paramiko.client import AutoAddPolicy, RejectPolicy, SSHClient
 from paramiko.ssh_exception import NoValidConnectionsError, SSHException
 from scp import SCPClient
@@ -124,16 +125,21 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
 
         sshserver = f"{self.user}@{self.host}"
         LOG.info(f"{self.binding.name}: tunneling to {sshserver}")
-        (shell_port, iopub_port, stdin_port, hb_port, control_port,) = tunnel_to_kernel(
-            conn_info, sshserver, sshkey=_expand_path(self.private_key_file)
-        )
 
-        conn_info["ip"] = "127.0.0.1"
-        conn_info["shell_port"] = shell_port
-        conn_info["iopub_port"] = iopub_port
-        conn_info["stdin_port"] = stdin_port
-        conn_info["hb_port"] = hb_port
-        conn_info["control_port"] = control_port
+        for port in port_names:
+            rport = conn_info[port]
+            tunnel_addr, tunnel_pid = tunnel.open_tunnel(
+                f"tcp://{conn_info['ip']}:{rport}",
+                sshserver,
+                keyfile=_expand_path(self.private_key_file),
+                # Set a very high timeout of 5 days, default is 60 seconds.
+                # Our kernels are likely to be inactive for some time and it's
+                # not very obvious how to gracefully bring them back up atm.
+                timeout=(60 * 60 * 24 * 5),
+            )
+            _, addr = tunnel_addr.split("://")
+            lport = addr.split(":")[1]
+            conn_info[port] = int(lport)
 
         self.pid = int(subkernel["pid"])
 

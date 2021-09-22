@@ -21,7 +21,7 @@ import {
 } from '@jupyterlab/services/lib/kernel/kernel';
 import { IDisposable } from '@lumino/disposable';
 import { IBindingModel, IBindingRegistry } from './tokens';
-import { findIndex } from '@lumino/algorithm';
+import { findIndex, toArray } from '@lumino/algorithm';
 import { JSONArray } from '@lumino/coreutils';
 
 const COMM_CHANNEL = 'hydra';
@@ -33,10 +33,7 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
     this.isDisposed = true;
   }
 
-  register(
-    kernel: IKernelConnection,
-    initialBindings: IBindingModel[]
-  ): IObservableList<IBindingModel> {
+  register(kernel: IKernelConnection): IObservableList<IBindingModel> {
     if (this._bindings.has(kernel)) {
       return this._bindings.get(kernel).bindings;
     }
@@ -45,7 +42,6 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
       const comm: IComm = kernel.createComm(COMM_CHANNEL);
       comm.onMsg = this._onCommMsg.bind(this);
       comm.open();
-      console.log('kernel comm opened');
       return comm;
     };
 
@@ -65,7 +61,7 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
         tracker.comm = createComm();
         tracker.comm.send({
           event: 'binding_list_request',
-          bindings: (initialBindings as unknown) as JSONArray
+          bindings: (toArray(tracker.bindings) as unknown) as JSONArray
         });
       }
     };
@@ -131,7 +127,6 @@ export class BindingRegistry implements IBindingRegistry, IDisposable {
     }
 
     const data = msg?.content?.data;
-    console.debug('Got message: ', data);
     const { event } = data || {};
 
     function locateBinding(): [IBindingModel, number] {
