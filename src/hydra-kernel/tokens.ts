@@ -33,6 +33,7 @@ export declare namespace IBindingModel {
     readonly type: 'ssh';
     readonly host: string;
     readonly user?: string;
+    readonly privateKeyFile?: string;
   }
   interface IZunConnection {
     readonly type: 'zun';

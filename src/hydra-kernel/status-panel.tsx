@@ -213,24 +213,32 @@ class BindingStatus extends React.Component<
     const binding = this.props.binding;
     const connection = binding.connection;
 
-    let hostDisplay;
+    const basicDisplay = (
+      <div>
+        Connection: {connection.type}
+        <br />
+        Kernel: {binding.kernel}
+      </div>
+    );
+    let connectionDisplay;
     let sshConnection, zunConnection;
     switch (binding.connection.type) {
       case 'local':
-        hostDisplay = <span>Local</span>;
         break;
       case 'ssh':
         sshConnection = connection as IBindingModel.ISSHConnection;
-        hostDisplay = (
-          <span>
-            Host: {sshConnection.user && <span>{sshConnection.user}@</span>}
+        connectionDisplay = (
+          <div>
+            SSH: <span>{sshConnection.user}@</span>
             <span>{sshConnection.host}</span>
-          </span>
+            <br />
+            Identity file: {sshConnection.privateKeyFile}
+          </div>
         );
         break;
       case 'zun':
         zunConnection = connection as IBindingModel.IZunConnection;
-        hostDisplay = <span>Container: {zunConnection.containerUuid}</span>;
+        connectionDisplay = <div>Container: {zunConnection.containerUuid}</div>;
         break;
       default:
         break;
@@ -248,28 +256,36 @@ class BindingStatus extends React.Component<
 
     return (
       <div className="chi-Binding" onClick={this.handleClick}>
-        <div className="chi-Binding-status">
-          <statusIcon.react></statusIcon.react>
-        </div>
-        <div className="chi-Binding-summary">
-          <div className="chi-Binding-name">{binding.name}</div>
-          <div className={`chi-BindingState-${binding.state}`}>
-            {binding.state}
+        <div className="chi-BindingSummary">
+          <div className="chi-BindingSummary-status">
+            <statusIcon.react></statusIcon.react>
           </div>
-          <div className="chi-BindingState-progress">
-            {binding.progress.progress}
-            {binding.progress.progressRatio && (
-              <div className="chi-BindingState-progressBarContainer">
-                <span
-                  className="chi-BindingState-progressBar"
-                  style={progressBarStyle}
-                ></span>
-              </div>
-            )}
+          <div className="chi-BindingSummary-summary">
+            <div className="chi-Binding-name">{binding.name}</div>
+            <div className={`chi-BindingState-${binding.state}`}>
+              {binding.state}
+            </div>
+            <div className="chi-BindingState-progress">
+              {binding.progress.progress}
+              {binding.progress.progressRatio && (
+                <div className="chi-BindingState-progressBarContainer">
+                  <span
+                    className="chi-BindingState-progressBar"
+                    style={progressBarStyle}
+                  ></span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <Collapse keepChildrenMounted={true} isOpen={this.state.isOpen}>
-          <div className="chi-BindingConnection">{hostDisplay}</div>
+          <div className="chi-BindingConnection">
+            <div className="chi-BindingConnection-header">
+              Connection details
+            </div>
+            {basicDisplay}
+            {connectionDisplay}
+          </div>
         </Collapse>
       </div>
     );

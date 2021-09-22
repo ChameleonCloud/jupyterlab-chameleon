@@ -1,10 +1,10 @@
 :root {
-  --chi-binding0: var(--md-amber-100);
-  --chi-binding1: var(--md-blue-100);
-  --chi-binding2: red;
-  --chi-binding3: green;
-  --chi-binding4: yellow;
-  --chi-binding5: blue;
+  --chi-binding0: var(--md-amber-50);
+  --chi-binding1: var(--md-blue-50);
+  --chi-binding2: var(--md-red-50);
+  --chi-binding3: var(--md-green-50);
+  --chi-binding4: var(--md-yellow-50);
+  --chi-binding5: var(--md-purple-50);
 }
 
 .jp-Notebook .jp-Cell.jp-mod-active.chi-binding-0 .jp-Collapser {
@@ -98,16 +98,27 @@
 }
 
 .chi-Binding {
-  display: flex;
-  padding: 12px;
   border-bottom: 1px solid var(--jp-border-color2);
 }
+.chi-Binding:hover {
+  background: var(--jp-layout-color2);
+  cursor: pointer;
+}
 
-.chi-Binding-summary {
+.chi-BindingSummary {
+  display: flex;
+  padding: 12px;
+}
+
+.chi-BindingSummary-status {
+  padding: 2px 5px 0 0;
+}
+
+.chi-BindingSummary-summary {
   flex: 1
 }
 
-.chi-Binding-name {
+.chi-BindingSummary-name {
   margin-bottom: 0;
   font-weight: bolder;
 }
@@ -118,6 +129,17 @@
 
 .chi-BindingState-progress {
   color: var(--jp-ui-font-color2);
+}
+
+.chi-BindingConnection {
+  padding: 3px 12px 12px 33px;  /* 33 = 12 + 21 (width of icon + 5px padding) */
+}
+
+.chi-BindingConnection-header {
+  font-size: var(--jp-ui-font-size0);
+  text-transform: uppercase;
+  font-weight: bolder;
+  margin-bottom: 8px;
 }
 
 .chi-HydraBindings-content {

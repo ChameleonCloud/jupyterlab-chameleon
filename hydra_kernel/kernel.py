@@ -222,9 +222,7 @@ class HydraKernel(IPythonKernel):
             except Exception as exc:
                 self.log.exception(f"Failed to start subkernel for '{binding_name}'")
                 self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)
-                if not silent and stop_on_error:
-                    await self._abort_queues()
-                return
+                raise
 
             km: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
             km.add_restart_callback(partial(self.on_subkernel_restart, binding_name))

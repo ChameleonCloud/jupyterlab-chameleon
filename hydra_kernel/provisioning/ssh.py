@@ -112,7 +112,7 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
         self.binding.update_progress("Establishing secure connection")
 
         LOG.info(f"{self.binding.name}: kernel_cmd={command}")
-        subkernel = self.connection.exec_json(command)
+        subkernel = self.connection.exec_json(command, login=True)
         conn_info = subkernel["connection"]
         LOG.info(f"{self.binding.name}: connection={conn_info}")
 
@@ -154,13 +154,18 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
             LOG.info(f"Fetching all kernel specs for '{self.binding.name}'")
             try:
                 self._kernelspecs = self.connection.exec_json(
-                    "jupyter kernelspec list --json --log-level ERROR"
+                    "jupyter kernelspec list --json --log-level ERROR", login=True
                 )["kernelspecs"]
             except RuntimeError as exc:
                 LOG.warn((f"Failed to list kernel specs on {self.binding.name}: {exc}"))
+                return False
 
-        # TODO: also check languages?
-        return self._kernelspecs and kernel_name in self._kernelspecs
+        for spec_name, spec_info in self._kernelspecs.items():
+            lang = spec_info["spec"]["language"]
+            if spec_name == kernel_name or lang == kernel_name:
+                return True
+
+        return False
 
     async def provision_remote_kernelspec(self, kernel_name):
         ansible_dir = os.path.join(sys.prefix, "share", "hydra-kernel", "ansible")
@@ -188,7 +193,9 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
                     quiet=True,
                     json_mode=True,
                 )
-                LOG.info(runner.stdout.read())
+                LOG.debug(runner.stdout.read())
+                if runner.errored:
+                    raise RuntimeError(f"Failed to install kernel {kernel_name}")
 
         # Invalidate kernelspecs as we have installed a new one
         self._kernelspecs = None
@@ -204,7 +211,7 @@ class SSHConnection(object):
         self.parent = parent
 
     def exec(
-        self, command: "typing.Union[list,str]", timeout=None
+        self, command: "typing.Union[list,str]", login=False, timeout=None
     ) -> "tuple[int,io.RawIOBase,io.RawIOBase]":
         """Execute a command on the binding host.
 
@@ -213,6 +220,10 @@ class SSHConnection(object):
         Args:
             command (Union[list,str]): the command to run. This can either be
                 passed as a list of command arguments, or as a command string.
+            login (bool): whether to invoke a login shell. This is more brittle
+                and complex than opening a non-interactive/login session, so
+                should only be used if having a "real" user environment is
+                necessary.
             timeout (int): how long to wait before terminating the command.
                 Defaults to None, meaning no timeout.
 
@@ -222,55 +233,66 @@ class SSHConnection(object):
         """
         if isinstance(command, str):
             command = shlex.split(command)
+
+        safe_cmd = shlex.join(command)
+
         with self._ssh_connect() as ssh:
-            chan = ssh.invoke_shell()
-            stdout = ""
-            stderr = ""
-            safe_cmd = shlex.join(command)
-            exit_cmd = "echo ::exit=$?"
-            commands = [safe_cmd, exit_cmd]
-            chan.sendall("\n".join(commands) + "\n")
-            exit_status = 0
-            while True:
-                if chan.recv_stderr_ready():
-                    stderr += chan.recv_stderr(4096).decode("utf-8")
-                if chan.recv_ready():
-                    sout = chan.recv(4096).decode("utf-8")
-                    stdout += sout
-                    if re.search("::exit=(\d+)", sout):
-                        break
+            if login:
+                return self._exec_login_shell(ssh, safe_cmd, timeout=timeout)
+            else:
+                _, stdout, stderr = ssh.exec_command(safe_cmd, timeout=timeout)
+                return stdout.channel.recv_exit_status(), stdout, stderr
 
-            proc_stdout = []
-            in_proc_out = False
-            for line in stdout.splitlines():
-                if in_proc_out:
-                    if exit_cmd in line:
-                        continue
-                    if line.startswith("::exit"):
-                        exit_status = int(line.split("=")[1])
-                        break
-                    proc_stdout.append(line)
-                elif safe_cmd in line and not line.startswith(safe_cmd):
-                    # When paramiko runs the command it will often flush it
-                    # to the buffer before the shell has the chance to start
-                    # executing it; the shell will print the command again as
-                    # part of the prompt. By ignoring a single line that is
-                    # the entire contents of the command we can edit out this
-                    # case.
-                    in_proc_out = True
+    def _exec_login_shell(
+        self, ssh: "SSHClient", safe_cmd: "str", timeout: "float" = None
+    ) -> "tuple[int,io.StringIO,io.StringIO]":
+        chan = ssh.invoke_shell()
+        chan.settimeout(timeout)
+        stdout = ""
+        stderr = ""
+        exit_cmd = "echo ::exit=$?"
+        commands = [safe_cmd, exit_cmd]
+        chan.sendall("\n".join(commands) + "\n")
+        exit_status = 0
+        while True:
+            if chan.recv_stderr_ready():
+                stderr += chan.recv_stderr(4096).decode("utf-8")
+            if chan.recv_ready():
+                sout = chan.recv(4096).decode("utf-8")
+                stdout += sout
+                if re.search("::exit=(\d+)", sout):
+                    break
 
-            LOG.debug(f"stdout={stdout}")
-            LOG.debug(f"process stdout={proc_stdout}")
-            LOG.debug(f"stderr={stderr}")
-            chan.close()
-            return (
-                exit_status,
-                io.StringIO("\n".join(proc_stdout)),
-                io.StringIO(stderr),
-            )
+        proc_stdout = []
+        in_proc_out = False
+        for line in stdout.splitlines():
+            if in_proc_out:
+                if exit_cmd in line:
+                    continue
+                if line.startswith("::exit"):
+                    exit_status = int(line.split("=")[1])
+                    break
+                proc_stdout.append(line)
+            elif safe_cmd in line and not line.startswith(safe_cmd):
+                # When paramiko runs the command it will often flush it
+                # to the buffer before the shell has the chance to start
+                # executing it; the shell will print the command again as
+                # part of the prompt. By ignoring a single line that is
+                # the entire contents of the command we can edit out this
+                # case.
+                in_proc_out = True
 
-    def exec_json(self, command: "str", timeout=None) -> "typing.Union[dict,list]":
-        code, stdout, stderr = self.exec(command, timeout=timeout)
+        chan.close()
+        return (
+            exit_status,
+            io.StringIO("\n".join(proc_stdout)),
+            io.StringIO(stderr),
+        )
+
+    def exec_json(
+        self, command: "str", login=False, timeout=None
+    ) -> "typing.Union[dict,list]":
+        code, stdout, stderr = self.exec(command, login=login, timeout=timeout)
         if code > 0:
             raise RuntimeError(stderr.read())
         return json.load(stdout)

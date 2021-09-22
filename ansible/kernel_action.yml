@@ -8,23 +8,15 @@
       loop:
         - jupyter_core
         - jupyter_client
-    - name: "Finding Python path"
-      ansible.builtin.shell: which python
-      register: python_path
-    - name: "Finding Python path"
-      set_fact:
-        install_path: "{{ python_path.stdout | dirname }}"
     - name: "Installing subkernel agents"
-      become: yes
       ansible.builtin.copy:
         src: bin/hydra-agent
-        dest: "{{ install_path }}/hydra-agent"
+        dest: ~/.local/bin/hydra-agent
         mode: preserve
     - name: "Installing subkernel agents"
-      become: yes
       ansible.builtin.copy:
         src: bin/hydra-subkernel
-        dest: "{{ install_path }}/hydra-subkernel"
+        dest: ~/.local/bin/hydra-subkernel
         mode: preserve
   roles:
     - "{{ kernel_name }}"
