@@ -130,7 +130,12 @@ class HydraKernel(IPythonKernel):
         super().__init__(**kwargs)
         self.binding_manager = BindingManager()
         if self.shell:
-            binding_magics = BindingMagics(self.shell, self.binding_manager)
+            binding_magics = BindingMagics(
+                self.shell,
+                self.binding_manager,
+                upload_handler=self.subkernel_upload,
+                download_handler=self.subkernel_download,
+            )
             self.shell.register_magics(binding_magics)
 
         self.binding_manager.on_change(self.on_binding_change)
@@ -239,25 +244,7 @@ class HydraKernel(IPythonKernel):
         silent = content["silent"]
         stop_on_error = content.get("stop_on_error", True)
 
-        # Check if binding name is valid (is there a binding set up?)
-        if binding_name not in self._subkernels:
-            binding.state = BindingState.CREATING
-            self.log.info(f"{binding_name}: starting subkernel")
-            try:
-                kernel_id: "str" = self.kernel_manager.start_kernel(
-                    binding.kernel, binding=binding
-                )
-            except Exception as exc:
-                self.log.exception(f"Failed to start subkernel for '{binding_name}'")
-                self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)
-                raise
-
-            km: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
-            km.add_restart_callback(partial(self.on_subkernel_restart, binding_name))
-            km.observe(self.on_subkernel_ports_changed, names=port_names)
-            self._subkernels[binding_name] = km
-
-        km = self._subkernels[binding_name]
+        km = self._subkernel_manager(binding_name)
 
         # TODO: it is possible to restart the kernel, which will kill the SSH
         # tunnels. We need to recreate them as part of start_channels.
@@ -325,6 +312,49 @@ class HydraKernel(IPythonKernel):
 
         if not silent and proxy.reply_content["status"] == "error" and stop_on_error:
             await self._abort_queues()
+
+    def _subkernel_manager(self, binding):
+        binding_name = binding.name
+
+        # Check if binding name is valid (is there a binding set up?)
+        if binding_name not in self._subkernels:
+            binding.state = BindingState.CREATING
+            self.log.info(f"{binding_name}: starting subkernel")
+            try:
+                kernel_id: "str" = self.kernel_manager.start_kernel(
+                    binding.kernel, binding=binding
+                )
+            except Exception as exc:
+                self.log.exception(f"Failed to start subkernel for '{binding_name}'")
+                self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)
+                raise
+
+            km: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
+            km.add_restart_callback(partial(self.on_subkernel_restart, binding_name))
+            km.observe(self.on_subkernel_ports_changed, names=port_names)
+            self._subkernels[binding_name] = km
+
+        return self._subkernels[binding_name]
+
+    async def subkernel_upload(
+        self, binding: "Binding", local_path: "str", remote_path: "str" = None
+    ):
+        km = self._subkernel_manager(binding)
+
+        if not hasattr(km.provisioner, "upload_path"):
+            raise ValueError(f"Upload not supported for {binding.name}")
+
+        await km.provisioner.upload_path(local_path, remote_path)
+
+    async def subkernel_download(
+        self, binding: "Binding", remote_path: "str", local_path: "str" = None
+    ):
+        km = self._subkernel_manager(binding)
+
+        if not hasattr(km.provisioner, "download_path"):
+            raise ValueError(f"Download not supported for {binding.name}")
+
+        await km.provisioner.download_path(local_path, remote_path)
 
     def on_subkernel_ports_changed(self, change):
         km: "HydraKernelManager" = change["owner"]

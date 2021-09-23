@@ -208,6 +208,12 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
         # Invalidate kernelspecs as we have installed a new one
         self._kernelspecs = None
 
+    async def upload_path(self, local_path: "str", remote_path: "str" = None):
+        pass
+
+    async def download_path(self, remote_path: "str", local_path: "str" = None):
+        self.connection.get_file(remote_path)
+
     def _on_ansible_event(self, event):
         current_task = event.get("event_data", {}).get("task")
         if current_task:

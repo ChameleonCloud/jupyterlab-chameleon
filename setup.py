@@ -80,7 +80,7 @@ setup_args = dict(
     long_description=long_description,
     long_description_content_type="text/markdown",
     cmdclass=cmdclass,
-    packages=["jupyterlab_chameleon", "hydra_kernel"],
+    packages=setuptools.find_packages(),
     install_requires=[
         "ansible_runner",
         "ipykernel~=6.0",

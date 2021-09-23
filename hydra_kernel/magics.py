@@ -1,5 +1,3 @@
-from argparse import ArgumentParser
-import sys
 import typing
 
 from IPython.core.magic import (
@@ -7,95 +5,117 @@ from IPython.core.magic import (
     magics_class,
     line_magic,
 )
-from traitlets.traitlets import Unicode
-
-from hydra_kernel.binding import Binding
+from IPython.core.magic_arguments import (
+    argument,
+    argument_group,
+    magic_arguments,
+    parse_argstring,
+)
 
 if typing.TYPE_CHECKING:
     from .binding import BindingManager
 
 
-class NonExitingArgumentParser(ArgumentParser):
-    def exit(self, status=0, message=None):
-        if status > 0:
-            sys.stderr.write(message or f"Exited with status {status}")
-
-
 @magics_class
 class BindingMagics(Magics):
-
-    default_user = Unicode("cc", help="Default username for authentication")
-
-    def __init__(self, shell, binding_manager: "BindingManager"):
+    def __init__(
+        self,
+        shell,
+        binding_manager: "BindingManager",
+        upload_handler=None,
+        download_handler=None,
+    ):
         super(BindingMagics, self).__init__(shell)
         self.binding_manager = binding_manager
-        self.parser = NonExitingArgumentParser(prog="%binding")
+        self.upload_handler = upload_handler
+        self.download_handler = download_handler
 
-        subparsers = self.parser.add_subparsers(title="commands", dest="command")
-        parser_set = subparsers.add_parser(
-            "set",
-            help=("update connection or kernel parameters for a subkernel"),
+    @magic_arguments()
+    @argument("name", help="name of the subkernel")
+    @argument(
+        "-t",
+        "--connection",
+        dest="connection_type",
+        help="connection type",
+        default="ssh",
+        choices={"local", "ssh", "zun"},
+    )
+    @argument(
+        "--kernel",
+        help="the type of kernel to launch (e.g., 'python')",
+        default="python",
+    )
+    @argument_group("SSH", "options for SSH-connected subkernels")
+    @argument("-h", "--host", dest="ssh_host", help="the remote SSH host")
+    @argument("-u", "--user", dest="ssh_user", default="cc", help="the remote SSH user")
+    @argument(
+        "-i",
+        "--identity-file",
+        metavar="PATH",
+        dest="ssh_private_key_file",
+        help="An optional SSH identity file to use for authentication",
+    )
+    @argument_group("Zun", "options for subkernels launched via Zun")
+    @argument("--container", dest="zun_container", help="the container UUID or name")
+    @line_magic
+    def subkernel_set(self, line):
+        """Configure a subkernel."""
+        args = parse_argstring(self.subkernel_set, line)
+        connection = {"type": args.connection_type}
+        if args.connection_type == "ssh":
+            connection.update(
+                {
+                    "host": args.ssh_host,
+                    "user": args.ssh_user,
+                    "private_key_file": args.ssh_private_key_file,
+                }
+            )
+        else:
+            connection.update(
+                {
+                    "container_uuid": args.zun_container,
+                }
+            )
+        self.binding_manager.set(
+            args.name,
+            kernel=args.kernel,
+            connection=connection,
         )
-        parser_set.add_argument("name", help="name of the subkernel")
-        parser_set.add_argument(
-            "--connection",
-            choices={"local", "ssh", "zun"},
-            help="type of connection",
-            default="ssh",
-            dest="connection_type",
-        )
-        parser_set.add_argument(
-            "--ssh-host", help="hostname, ipv4 or ipv6 address of the remote host"
-        )
-        parser_set.add_argument(
-            "--ssh-user",
-            help="user to authenticate to host as",
-            default=self.default_user,
-        )
-        parser_set.add_argument(
-            "--ssh-private-key-file",
-            help="private key file to authenticate to host with",
-        )
-        parser_set.add_argument("--zun-container", help="container UUID")
-        parser_set.add_argument("--kernel", choices=Binding.kernel.values)
-
-        parser_list = subparsers.add_parser(
-            "list", help=("list all active remote and local bindings")
-        )
-
-        parser_delete = subparsers.add_parser(
-            "delete", help=("remove an active binding")
-        )
-        parser_delete.add_argument("name", help=("name of the binding"))
 
     @line_magic
-    def binding(self, line):
-        args = self.parser.parse_args(line.split())
-        if not args.command:
-            return
-        if args.command == "set":
-            connection = {"type": args.connection_type}
-            if args.connection_type == "ssh":
-                connection.update(
-                    {
-                        "host": args.ssh_host,
-                        "user": args.ssh_user,
-                        "private_key_file": args.ssh_private_key_file,
-                    }
-                )
-            else:
-                connection.update(
-                    {
-                        "container_uuid": args.zun_container,
-                    }
-                )
-            self.binding_manager.set(
-                args.name,
-                kernel=args.kernel,
-                connection=connection,
-            )
-        elif args.command == "list":
-            print("\n".join(str(binding) for binding in self.binding_manager.list()))
-        elif args.command == "delete":
-            self.binding_manager.delete(args.name)
-            print(f"Deleted binding {args.name}")
+    def subkernel_list(self, line):
+        """List all configured subkernels."""
+        print("\n".join(str(binding) for binding in self.binding_manager.list()))
+
+    @magic_arguments()
+    @argument("name", help="name of the subkernel")
+    @line_magic
+    def subkernel_delete(self, line):
+        """Delete a subkernel."""
+        args = parse_argstring(self.subkernel_delete, line)
+        self.binding_manager.delete(args.name)
+        print(f"Deleted binding {args.name}")
+
+    @magic_arguments()
+    @argument("name", help="name of the subkernel")
+    @argument("local_path", help="local path to upload")
+    @argument("remote_path", help="remote path to upload to")
+    @line_magic
+    def subkernel_upload(self, line):
+        """Upload a file/directory to a subkernel's file system."""
+        args = parse_argstring(self.subkernel_upload, line)
+        self.upload_handler(
+            self.binding_manager.get(args.name, args.local_path, args.remote_path)
+        )
+
+    @magic_arguments()
+    @argument("name", help="name of the subkernel")
+    @argument("remote_path", help="remote path to download from")
+    @argument("local_path", help="local path to download to")
+    @line_magic
+    def subkernel_download(self, line):
+        """Download a file/directory from a subkernel's file system."""
+        args = parse_argstring(self.subkernel_download, line)
+        self.download_handler(
+            self.binding_manager.get(args.name, args.remote_path, args.local_path)
+        )
