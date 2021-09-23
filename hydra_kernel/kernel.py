@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from functools import partial
+import re
 import signal
 import time
 import typing
@@ -30,6 +31,23 @@ __version__ = "0.0.1"
 def to_camel_case(input: "str"):
     parts: "list[str]" = input.split("_")
     return parts[0] + "".join([p.title() for p in parts[1:]])
+
+
+CAMEL_BOUNDARY_REGEX = re.compile(r"(?<!^)(?=[A-Z])")
+
+
+def to_snake_case(input: "str"):
+    return CAMEL_BOUNDARY_REGEX.sub("_", input).lower()
+
+
+def transform_keys(obj: "dict", key_fn: "Callable"):
+    assert key_fn is not None
+    out = {}
+    for key, value in obj.items():
+        if isinstance(value, dict):
+            value = transform_keys(value, key_fn)
+        out[key_fn(key)] = value
+    return out
 
 
 class ProxyComms(object):
@@ -141,15 +159,7 @@ class HydraKernel(IPythonKernel):
         LOG.debug(f"Registered comm channel {comm} with open request {message}")
 
     def _binding_comm_payload(self, binding: "Binding") -> "dict":
-        def _camelify(obj):
-            out = {}
-            for key, value in obj.items():
-                if isinstance(value, dict):
-                    value = _camelify(value)
-                out[to_camel_case(key)] = value
-            return out
-
-        return _camelify(binding.as_dict())
+        return transform_keys(binding.as_dict(), to_camel_case)
 
     def on_binding_change(self, binding: "Binding", change: "dict"):
         if self._comm:
@@ -193,7 +203,7 @@ class HydraKernel(IPythonKernel):
                         continue
                     self.binding_manager.set(
                         binding["name"],
-                        connection=binding["connection"],
+                        connection=transform_keys(binding["connection"], to_snake_case),
                         kernel=binding.get("kernel"),
                         state=BindingState.DISCONNECTED,
                     )
