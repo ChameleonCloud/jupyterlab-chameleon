@@ -19,7 +19,6 @@ import os
 import pathlib
 import re
 import shlex
-import subprocess
 import sys
 import tempfile
 import typing
@@ -27,7 +26,7 @@ from contextlib import contextmanager, redirect_stdout
 
 import ansible_runner
 from jupyter_client.connect import port_names
-from jupyter_client.ssh import tunnel
+from jupyter_client.ssh.tunnel import select_random_ports
 from paramiko.client import AutoAddPolicy, RejectPolicy, SSHClient
 from paramiko.ssh_exception import NoValidConnectionsError, SSHException
 from scp import SCPClient
@@ -72,15 +71,22 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
     _kernelspecs: "Dict" = None
     _subkernel_connection: "KernelConnectionInfo" = None
     _tunnels: "Dict[str, Tuple[str, int]]" = {}
+    _tunnel_ctl_path: "str" = None
 
     @property
     def has_process(self) -> bool:
-        return self.connection is not None and self.pid is not None
+        if self.connection is None:
+            return False
+        if self.pid is None:
+            return False
+        return True
 
     def reset(self) -> None:
         self.connection = None
         self.pid = None
         self._kernelspecs = None
+        self._tunnels = {}
+        self._tunnel_ctl_path = None
 
     async def _save_host_key(self):
         hosts_file_path = pathlib.Path(pathlib.Path.home(), ".ssh", "known_hosts")
@@ -175,8 +181,6 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
             return -1
 
     async def cleanup(self, restart: bool = False) -> None:
-        LOG.info("****************************************")
-        LOG.info("CLEANING UP SUB KERNEL")
         for port_name, tunnel in self._tunnels.items():
             try:
                 LOG.debug(f"Killing {port_name} SSH tunnel (pid={tunnel['pid']})")
@@ -242,29 +246,20 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
     async def download_path(self, remote_path: "str", local_path: "str" = None):
         self.connection.get_file(remote_path)
 
-    async def _tunnel_to_port(self, port_name: "str") -> "int":
-        sshserver = f"{self.user}@{self.host}"
+    async def _tunnel_to_port(self, port_name: "str", lport: "int" = None) -> "int":
         stream = io.StringIO()
         error = None
 
         with redirect_stdout(stream):
             try:
                 subkernel_conn = self._subkernel_connection
-                target = f"tcp://{subkernel_conn['ip']}:{subkernel_conn[port_name]}"
                 self.binding.update_progress(f"Starting kernel {port_name} tunnel")
-
-                tunnel_addr, tunnel_pid = tunnel.open_tunnel(
-                    target,
-                    sshserver,
-                    keyfile=_expand_path(self.private_key_file),
-                    # Set a very high timeout of 5 days, default is 60 seconds.
-                    # Our kernels are likely to be inactive for some time and it's
-                    # not very obvious how to gracefully bring them back up atm.
-                    timeout=(60 * 60 * 24 * 5),
-                )
-                _, addr = tunnel_addr.split("://")
-                tunnel_port = int(addr.split(":")[1])
-                self._tunnels[port_name] = {"lport": tunnel_port, "pid": tunnel_pid}
+                if not await self._is_tunnel_up():
+                    await self._start_tunnel()
+                if not lport:
+                    lport = select_random_ports(1)[0]
+                await self._forward_over_tunnel(lport, subkernel_conn[port_name])
+                self._tunnels[port_name] = lport
             except (RuntimeError, TypeError) as exc:
                 error = exc
 
@@ -273,7 +268,73 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
             LOG.error(f"error={error}, stdout={stream.read()}")
             raise RuntimeError(f"Failed to establish tunnel for {port_name}: {error}")
 
-        return self._tunnels[port_name]["lport"]
+        return self._tunnels[port_name]
+
+    @property
+    def _ssh_host(self):
+        return f"{self.user}@{self.host}"
+
+    @property
+    def _ssh_cmd(self):
+        cmd = ["ssh"]
+        if self.private_key_file:
+            cmd.extend(["-i", _expand_path(self.private_key_file)])
+        return cmd
+
+    async def _start_tunnel(self):
+        self._tunnel_ctl_path = pathlib.Path(
+            tempfile.gettempdir(), f"{self.user}-{self.host.replace('.', '-')}.tunnel"
+        )
+        if self._tunnel_ctl_path.exists():
+            self._tunnel_ctl_path.unlink()
+
+        cmd = self._ssh_cmd
+        cmd.extend(
+            [
+                "-fN",  # -f = background process, -N = don't run a command
+                "-o",
+                "ControlMaster=yes",
+                "-o",
+                f"ControlPath={self._tunnel_ctl_path}",
+                "-o",
+                "ServerAliveInterval=5",
+                self._ssh_host,
+            ]
+        )
+        tunnel_proc = await asyncio.create_subprocess_exec(*cmd)
+        _, stderr = await tunnel_proc.communicate()
+        if tunnel_proc.returncode != 0:
+            try:
+                self._tunnel_ctl_path = None
+            except:
+                pass
+            raise RuntimeError(f"Failed to establish SSH tunnel to {self.host}")
+
+    async def _forward_over_tunnel(self, lport, rport):
+        LOG.debug(f"_forward_over_tunnel: forwarding {lport} => {rport}")
+        returncode, _, _ = await self._tunnel_command(
+            ["forward", "-L", f"127.0.0.1:{lport}:127.0.0.1:{rport}"]
+        )
+
+    async def _is_tunnel_up(self):
+        if not self._tunnel_ctl_path:
+            return False
+        returncode, _, _ = await self._tunnel_command(["check"])
+        return returncode == 0
+
+    async def _tunnel_command(self, cmd: "list[str]"):
+        proc = await asyncio.create_subprocess_exec(
+            *self._ssh_cmd,
+            "-o",
+            f"ControlPath={self._tunnel_ctl_path}",
+            "-O",
+            *cmd,
+            self._ssh_host,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        return proc.returncode, stdout, stderr
 
     def _on_ansible_event(self, event):
         current_task = event.get("event_data", {}).get("task")

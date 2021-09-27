@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import logging
 from functools import partial
 import re
@@ -147,14 +148,16 @@ class HydraKernel(IPythonKernel):
         LOG.debug("Registering comm channel")
         self.comm_manager.register_target("hydra", self.on_comm_open)
 
-    def do_shutdown(self, restart):
+    async def do_shutdown(self, restart):
+        ret = super().do_shutdown(restart)
+        if inspect.isawaitable(ret):
+            ret = await ret
         # Also shut down all managed subkernels
         for kernel_id in self.kernel_manager.list_kernel_ids():
             LOG.info(f"Shutting down subkernel {kernel_id}")
             kernel: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
-            run_sync(kernel.shutdown_kernel)(restart=restart)
-
-        return super().do_shutdown(restart)
+            await kernel.shutdown_kernel(restart=restart)
+        return ret
 
     def on_comm_open(self, comm: "Comm", message: "dict"):
         if self._comm:
