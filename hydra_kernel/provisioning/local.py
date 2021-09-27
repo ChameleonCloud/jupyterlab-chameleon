@@ -48,6 +48,7 @@ class LocalHydraKernelProvisioner(HydraKernelProvisioner):
             "hydra-agent",
             f"--kernel={self.binding.kernel}",
             f"--id={self.kernel_id}",
+            "--debug",
         ]
         return kwargs
 
@@ -72,11 +73,15 @@ class LocalHydraKernelProvisioner(HydraKernelProvisioner):
             subkernel = json.load(stdout)
 
         self.pid = subkernel["pid"]
+        conn_info = subkernel["connection"]
 
-        return subkernel["connection"]
+        LOG.info(f"{self.binding.name}: connection={conn_info}")
+
+        return conn_info
 
     async def send_signal(self, signum: int) -> None:
         try:
+            LOG.info(f"kill -{signum} {self.pid}")
             os.kill(self.pid, signum)
         except ProcessLookupError:
             self.reset()

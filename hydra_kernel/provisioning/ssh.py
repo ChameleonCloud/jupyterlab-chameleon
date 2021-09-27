@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import asyncio
 import io
 import json
 import logging
@@ -22,7 +23,7 @@ import subprocess
 import sys
 import tempfile
 import typing
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
 
 import ansible_runner
 from jupyter_client.connect import port_names
@@ -33,11 +34,11 @@ from scp import SCPClient
 from traitlets.traitlets import Bool, Instance, Int, Unicode
 
 from ..binding import BindingConnectionError
-from ..utils import redirect_output
 from .base import HydraKernelProvisioner
 
 if typing.TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional
+    from jupyter_client.connect import KernelConnectionInfo
+    from typing import Any, Dict, List, Optional, Tuple
 
 LOG = logging.getLogger(__name__)
 DEFAULT_SSH_TIMEOUT = 10
@@ -68,7 +69,9 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
     )
     pid = Int(allow_none=True)
 
-    _kernelspecs = None
+    _kernelspecs: "Dict" = None
+    _subkernel_connection: "KernelConnectionInfo" = None
+    _tunnels: "Dict[str, Tuple[str, int]]" = {}
 
     @property
     def has_process(self) -> bool:
@@ -79,21 +82,44 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
         self.pid = None
         self._kernelspecs = None
 
-    def _save_host_key(self, host):
+    async def _save_host_key(self):
         hosts_file_path = pathlib.Path(pathlib.Path.home(), ".ssh", "known_hosts")
         hosts_file_path.parent.mkdir(exist_ok=True)
         hosts_file_path.touch()
-        with hosts_file_path.open("a") as hosts_file:
-            with redirect_output() as stderr:
-                proc = subprocess.run(
-                    shlex.split(f"ssh-keyscan -H {host}"),
-                    stdout=hosts_file,
-                    stderr=stderr,
-                )
-                if proc.returncode != 0:
-                    LOG.warning(
-                        (f"Failed to update host key for {host}: {stderr.read()}")
+        with hosts_file_path.open("r+") as hosts_file:
+            start = f"# BEGIN hydra_kernel: {self.host}"
+            end = f"# END hydra_kernel: {self.host}"
+            lines = hosts_file.readlines()
+            start_i, end_i = 0, 0
+            for i, line in enumerate(lines):
+                if line == start:
+                    start_i = i
+                elif line == end:
+                    end_i = i
+                    break
+            # Splice out block
+            lines = lines[:start_i] + lines[end_i:]
+
+            proc = await asyncio.create_subprocess_exec(
+                "ssh-keyscan",
+                "-H",
+                shlex.quote(self.host),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            if proc.returncode != 0:
+                LOG.warning(
+                    (
+                        f"Failed to update host key for {self.host}: {proc.stderr.decode('utf-8')}"
                     )
+                )
+
+            lines.append(start)
+            lines.append(stdout.decode("utf-8"))
+            lines.append(end)
+            hosts_file.seek(0)
+            hosts_file.write("\n".join(lines))
 
     async def pre_launch(self, **kwargs: "Any") -> "Dict[str, Any]":
         kwargs = await super().pre_launch(**kwargs)
@@ -120,26 +146,16 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
 
         LOG.info(f"{self.binding.name}: kernel_cmd={command}")
         subkernel = self.connection.exec_json(command, login=True)
-        conn_info = subkernel["connection"]
-        LOG.info(f"{self.binding.name}: connection={conn_info}")
+        self._subkernel_connection = subkernel["connection"]
+        LOG.info(f"{self.binding.name}: connection={self._subkernel_connection}")
 
-        sshserver = f"{self.user}@{self.host}"
-        LOG.info(f"{self.binding.name}: tunneling to {sshserver}")
+        conn_info = self._subkernel_connection.copy()
 
-        for port in port_names:
-            rport = conn_info[port]
-            tunnel_addr, tunnel_pid = tunnel.open_tunnel(
-                f"tcp://{conn_info['ip']}:{rport}",
-                sshserver,
-                keyfile=_expand_path(self.private_key_file),
-                # Set a very high timeout of 5 days, default is 60 seconds.
-                # Our kernels are likely to be inactive for some time and it's
-                # not very obvious how to gracefully bring them back up atm.
-                timeout=(60 * 60 * 24 * 5),
-            )
-            _, addr = tunnel_addr.split("://")
-            lport = addr.split(":")[1]
-            conn_info[port] = int(lport)
+        if not self.host_key_checking:
+            await self._save_host_key()
+
+        for port_name in port_names:
+            conn_info[port_name] = await self._tunnel_to_port(port_name)
 
         self.pid = int(subkernel["pid"])
 
@@ -153,9 +169,21 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
 
     async def poll(self) -> "Optional[int]":
         try:
+            # TODO: also check status of tunnels here
             self.connection.exec(f"kill -0 {self.pid}")
         except OSError:
             return -1
+
+    async def cleanup(self, restart: bool = False) -> None:
+        LOG.info("****************************************")
+        LOG.info("CLEANING UP SUB KERNEL")
+        for port_name, tunnel in self._tunnels.items():
+            try:
+                LOG.debug(f"Killing {port_name} SSH tunnel (pid={tunnel['pid']})")
+                os.kill(tunnel["pid"])
+            except OSError:
+                pass
+        self._tunnels = {}
 
     async def has_remote_kernelspec(self, kernel_name):
         if not self._kernelspecs:
@@ -186,7 +214,7 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with redirect_output():
+            with redirect_stdout(io.StringIO()):
                 runner = ansible_runner.run(
                     private_data_dir=tmpdir,
                     project_dir=ansible_dir,
@@ -213,6 +241,39 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
 
     async def download_path(self, remote_path: "str", local_path: "str" = None):
         self.connection.get_file(remote_path)
+
+    async def _tunnel_to_port(self, port_name: "str") -> "int":
+        sshserver = f"{self.user}@{self.host}"
+        stream = io.StringIO()
+        error = None
+
+        with redirect_stdout(stream):
+            try:
+                subkernel_conn = self._subkernel_connection
+                target = f"tcp://{subkernel_conn['ip']}:{subkernel_conn[port_name]}"
+                self.binding.update_progress(f"Starting kernel {port_name} tunnel")
+
+                tunnel_addr, tunnel_pid = tunnel.open_tunnel(
+                    target,
+                    sshserver,
+                    keyfile=_expand_path(self.private_key_file),
+                    # Set a very high timeout of 5 days, default is 60 seconds.
+                    # Our kernels are likely to be inactive for some time and it's
+                    # not very obvious how to gracefully bring them back up atm.
+                    timeout=(60 * 60 * 24 * 5),
+                )
+                _, addr = tunnel_addr.split("://")
+                tunnel_port = int(addr.split(":")[1])
+                self._tunnels[port_name] = {"lport": tunnel_port, "pid": tunnel_pid}
+            except (RuntimeError, TypeError) as exc:
+                error = exc
+
+        if error:
+            stream.seek(0)
+            LOG.error(f"error={error}, stdout={stream.read()}")
+            raise RuntimeError(f"Failed to establish tunnel for {port_name}: {error}")
+
+        return self._tunnels[port_name]["lport"]
 
     def _on_ansible_event(self, event):
         current_task = event.get("event_data", {}).get("task")

@@ -15,10 +15,16 @@ import logging
 import os
 import pathlib
 import typing
+from jupyter_client.asynchronous.client import AsyncKernelClient
 
-from jupyter_client.channels import HBChannel
+from jupyter_client.channels import HBChannel, ZMQSocketChannel
 from jupyter_client.ioloop.manager import IOLoopKernelManager
-from jupyter_client.multikernelmanager import DuplicateKernelError, MultiKernelManager
+from jupyter_client.manager import AsyncKernelManager
+from jupyter_client.multikernelmanager import (
+    AsyncMultiKernelManager,
+    DuplicateKernelError,
+    MultiKernelManager,
+)
 from jupyter_client.threaded import ThreadedKernelClient, ThreadedZMQSocketChannel
 from jupyter_core.paths import jupyter_data_dir
 from traitlets.traitlets import Instance, Type, default
@@ -34,16 +40,18 @@ HYDRA_DATA_DIR = os.path.join(jupyter_data_dir(), "hydra-kernel")
 pathlib.Path(HYDRA_DATA_DIR).mkdir(exist_ok=True)
 
 
-# Do some subclassing to ensure we are spawning threaded clients
-# for our proxy kernels (the default is blocking.)
-class HydraChannel(ThreadedZMQSocketChannel):
+class HydraChannel(ZMQSocketChannel):
     def __init__(self, socket, session, loop):
         super(HydraChannel, self).__init__(socket, session, loop)
         self._pipes = []
 
-    def call_handlers(self, msg):
-        for handler in self._pipes:
-            handler(msg)
+    async def _recv(self, **kwargs) -> "Dict[str, Any]":
+        LOG.debug("calling _recv")
+        smsg = await super()._recv(**kwargs)
+        LOG.debug(smsg)
+        for pipe in self._pipes:
+            pipe(smsg)
+        return smsg
 
     def pipe(self, handler):
         self._pipes.append(handler)
@@ -69,14 +77,14 @@ class HydraHBChannel(HBChannel):
         self._handlers.append(callback)
 
 
-class HydraKernelClient(ThreadedKernelClient):
+class HydraKernelClient(AsyncKernelClient):
     shell_channel_class = Type(HydraChannel)
     iopub_channel_class = Type(HydraChannel)
     hb_channel_class = Type(HydraHBChannel)
 
 
-class HydraKernelManager(IOLoopKernelManager):
-    client_class = "hydra_kernel.manager.HydraKernelClient"
+class HydraKernelManager(AsyncKernelManager):
+    client_factory = HydraKernelClient
 
     @default("kernel_spec_manager")
     def _default_kernel_spec_manager(self):
@@ -93,7 +101,7 @@ class HydraKernelManager(IOLoopKernelManager):
         return self.binding.kernel
 
 
-class HydraMultiKernelManager(MultiKernelManager):
+class HydraMultiKernelManager(AsyncMultiKernelManager):
     connection_dir = HYDRA_DATA_DIR
 
     def pre_start_kernel(self, kernel_name, kwargs):

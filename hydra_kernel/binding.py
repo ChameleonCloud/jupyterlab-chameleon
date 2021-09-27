@@ -113,7 +113,6 @@ class BindingManager(object):
         kernel: "str" = None,
         connection: "dict" = None,
         state: "str" = None,
-        message: "str" = None,
     ):
         binding = self._binding_map.get(name)
         if not binding:

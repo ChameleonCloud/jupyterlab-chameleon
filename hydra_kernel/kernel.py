@@ -9,6 +9,7 @@ import typing
 from ipykernel.comm import Comm
 from ipykernel.ipkernel import IPythonKernel
 from jupyter_client.connect import port_names
+from jupyter_client.utils import run_sync
 
 from .binding import (
     Binding,
@@ -68,9 +69,9 @@ class ProxyComms(object):
         return self._reply_content
 
     def on_iopub_message(self, msg):
+        LOG.debug(f"(proxy) iopub: {msg}")
         msg_type = msg["header"]["msg_type"]
         content = msg.get("content")
-        LOG.debug("IOPUB processing %s", msg_type)
         self.session.send(
             self.iopub,
             msg_type,
@@ -80,13 +81,12 @@ class ProxyComms(object):
         )
 
         if msg_type == "status" and content["execution_state"] == "idle":
-            LOG.debug("IOPUB calling on idle return")
             self._kernel_idle = True
 
     def on_shell_message(self, msg):
+        LOG.debug(f"(proxy) shell: {msg}")
         msg_type = msg["header"]["msg_type"]
         content = msg.get("content")
-        LOG.debug("SHELL processing %s", msg_type)
         if msg_type == "execute_request":
             # This message was sent ourselves and should not be
             # proxied back to the source.
@@ -152,7 +152,7 @@ class HydraKernel(IPythonKernel):
         for kernel_id in self.kernel_manager.list_kernel_ids():
             LOG.info(f"Shutting down subkernel {kernel_id}")
             kernel: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
-            kernel.shutdown_kernel(restart=restart)
+            run_sync(kernel.shutdown_kernel)(restart=restart)
 
         return super().do_shutdown(restart)
 
@@ -244,7 +244,7 @@ class HydraKernel(IPythonKernel):
         silent = content["silent"]
         stop_on_error = content.get("stop_on_error", True)
 
-        km = self._subkernel_manager(binding_name)
+        km = await self._subkernel_manager(binding)
 
         # TODO: it is possible to restart the kernel, which will kill the SSH
         # tunnels. We need to recreate them as part of start_channels.
@@ -253,7 +253,7 @@ class HydraKernel(IPythonKernel):
             self.log.info(f"{binding_name}: connecting to sub-kernel")
             kc: "HydraKernelClient" = km.client()
             # Currently piping to stdin channel is not supported
-            kc.start_channels(stdin=False)
+            kc.start_channels(stdin=False, hb=False)
             hb_channel: "HydraHBChannel" = kc.hb_channel
             hb_channel.add_handler(partial(self.on_subkernel_disconnect, binding_name))
             self._clients[km] = kc
@@ -277,9 +277,8 @@ class HydraKernel(IPythonKernel):
         def handle_sigint(signum, frame):
             # First proxy signal to subkernel, then run original handler
             try:
-                km.signal_kernel(signum)
+                run_sync(km.signal_kernel)(signum)
             except RuntimeError as exc:
-                LOG.error(km.is_alive())
                 LOG.error(f"Failed to interrupt subkernel {binding_name}: {exc}")
             binding.update_progress("Idle")
             orig_handler(signum, frame)
@@ -288,32 +287,27 @@ class HydraKernel(IPythonKernel):
         orig_handler = signal.signal(signal.SIGINT, handle_sigint)
 
         try:
+            LOG.debug(f"(send) shell={msg}")
             kc.shell_channel.send(msg)
-            # This will effectively block, but perhaps that is a good thing.
-            # Without blocking, it seems to allow multiple cells to execute in parallel.
             while not proxy.reply_content:
-                # NOTE: it is very tempting to put asyncio.sleep here, but
-                # this leads to some very strange errors, probably due to the
-                # complexity of all the nested async event loops and things
-                # going on b/w Tornado and the Jupyter kernel infrastructure.
-                # Leaving this a spin loop unfortunately is the most reliable
-                # solution until we can investigate further (look at how newer
-                # kernel module uses an awaitable `reply_content`).
-                time.sleep(0.1)
+                if await kc.shell_channel.msg_ready():
+                    await kc.shell_channel.get_msg()
+                if await kc.iopub_channel.msg_ready():
+                    await kc.iopub_channel.get_msg()
+                await asyncio.sleep(0.1)
+            res = proxy.reply_content
         finally:
             signal.signal(signal.SIGINT, orig_handler)
 
         # Ensure there's nothing that still needs to be proxied and cleanup.
-        kc.shell_channel.flush()
         kc.shell_channel.unpipe()
-        kc.iopub_channel.flush()
         kc.iopub_channel.unpipe()
         binding.update_progress("Idle")
 
-        if not silent and proxy.reply_content["status"] == "error" and stop_on_error:
+        if not silent and res["status"] == "error" and stop_on_error:
             await self._abort_queues()
 
-    def _subkernel_manager(self, binding):
+    async def _subkernel_manager(self, binding: "Binding"):
         binding_name = binding.name
 
         # Check if binding name is valid (is there a binding set up?)
@@ -321,12 +315,18 @@ class HydraKernel(IPythonKernel):
             binding.state = BindingState.CREATING
             self.log.info(f"{binding_name}: starting subkernel")
             try:
-                kernel_id: "str" = self.kernel_manager.start_kernel(
+                kernel_id: "str" = await self.kernel_manager.start_kernel(
                     binding.kernel, binding=binding
                 )
             except Exception as exc:
                 self.log.exception(f"Failed to start subkernel for '{binding_name}'")
                 self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)
+                error_message = str(exc)
+                if isinstance(exc, OSError):
+                    error_message = exc.strerror
+                    if exc.filename:
+                        error_message += f": '{exc.filename}'"
+                binding.update_progress(error_message)
                 raise
 
             km: "HydraKernelManager" = self.kernel_manager.get_kernel(kernel_id)
@@ -339,7 +339,7 @@ class HydraKernel(IPythonKernel):
     async def subkernel_upload(
         self, binding: "Binding", local_path: "str", remote_path: "str" = None
     ):
-        km = self._subkernel_manager(binding)
+        km = await self._subkernel_manager(binding)
 
         if not hasattr(km.provisioner, "upload_path"):
             raise ValueError(f"Upload not supported for {binding.name}")
@@ -349,7 +349,7 @@ class HydraKernel(IPythonKernel):
     async def subkernel_download(
         self, binding: "Binding", remote_path: "str", local_path: "str" = None
     ):
-        km = self._subkernel_manager(binding)
+        km = await self._subkernel_manager(binding)
 
         if not hasattr(km.provisioner, "download_path"):
             raise ValueError(f"Download not supported for {binding.name}")

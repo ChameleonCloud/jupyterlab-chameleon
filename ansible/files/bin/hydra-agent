@@ -26,11 +26,16 @@ from jupyter_core.paths import jupyter_runtime_dir
 
 parser = argparse.ArgumentParser("hydra")
 parser.add_argument("--id", required=True, help="The ID assigned to the kernel")
-parser.add_argument("--kernel", required=True, help="The kernel implementation to start")
+parser.add_argument(
+    "--kernel", required=True, help="The kernel implementation to start"
+)
 parser.add_argument("--timeout", default=10, help="A timeout on kernel startup")
-parser.add_argument("--launcher", default="hydra-subkernel", help="The kernel launch binary")
+parser.add_argument(
+    "--launcher", default="hydra-subkernel", help="The kernel launch binary"
+)
 parser.add_argument("--log-file", dest="log_to_file", action="store_true")
 parser.add_argument("--no-log-file", dest="log_to_file", action="store_false")
+parser.add_argument("--debug", dest="debug", action="store_true", default=False)
 parser.set_defaults(log_to_file=True)
 args = parser.parse_args(sys.argv[1:])
 
@@ -74,10 +79,10 @@ else:
 cmd_str = f"{args.launcher} --kernel={args.kernel} --KernelManager.connection_file={connection_file}"
 if args.log_to_file:
     cmd_str += f" --log-file={log_file}"
+if args.debug:
+    cmd_str += " --debug"
 kernel = subprocess.Popen(
-    shlex.split(cmd_str),
-    stderr=subprocess.STDOUT,
-    start_new_session=True
+    shlex.split(cmd_str), stderr=subprocess.STDOUT, start_new_session=True
 )
 
 start = time.perf_counter()

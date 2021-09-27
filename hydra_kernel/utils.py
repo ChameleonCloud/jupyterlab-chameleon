@@ -13,8 +13,8 @@
 # limitations under the License.
 
 from contextlib import contextmanager
+import io
 import sys
-import tempfile
 
 
 @contextmanager
@@ -22,8 +22,11 @@ def redirect_output():
     orig_stdout = sys.stdout
     orig_stderr = sys.stderr
     try:
-        with tempfile.TemporaryFile() as tmpf:
-            yield tmpf
+        with io.StringIO() as stdout_tmpf:
+            with io.StringIO() as stderr_tmpf:
+                sys.stdout = stdout_tmpf
+                sys.stderr = stderr_tmpf
+                yield (stdout_tmpf, stderr_tmpf)
     finally:
         sys.stdout = orig_stdout
         sys.stderr = orig_stderr
