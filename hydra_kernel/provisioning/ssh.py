@@ -419,8 +419,14 @@ class SSHConnection(object):
         chan.settimeout(timeout)
         stdout = ""
         stderr = ""
+        start_cmd = "echo ::start"
         exit_cmd = "echo ::exit=$?"
-        commands = [safe_cmd, exit_cmd]
+        # Prefix the command w/ the start command; this is because sometimes
+        # the TTY will echo parts of lagging inputs to stdout multiple times,
+        # and this can cause problems. echo will put "::start" on its own line,
+        # which is a more reliable token to use to tell when to start parsing
+        # the command output.
+        commands = [f"{start_cmd} && {safe_cmd}", exit_cmd]
         chan.sendall("\n".join(commands) + "\n")
         exit_status = 0
         while True:
@@ -442,7 +448,7 @@ class SSHConnection(object):
                     exit_status = int(line.split("=")[1])
                     break
                 proc_stdout.append(line)
-            elif safe_cmd in line and not line.startswith(safe_cmd):
+            elif line == "::start":
                 # When paramiko runs the command it will often flush it
                 # to the buffer before the shell has the chance to start
                 # executing it; the shell will print the command again as
