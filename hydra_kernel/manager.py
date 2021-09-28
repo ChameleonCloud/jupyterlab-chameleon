@@ -18,26 +18,19 @@ import typing
 from jupyter_client.asynchronous.client import AsyncKernelClient
 
 from jupyter_client.channels import HBChannel, ZMQSocketChannel
-from jupyter_client.ioloop.manager import IOLoopKernelManager
 from jupyter_client.manager import AsyncKernelManager
 from jupyter_client.multikernelmanager import (
     AsyncMultiKernelManager,
     DuplicateKernelError,
-    MultiKernelManager,
 )
-from jupyter_client.threaded import ThreadedKernelClient, ThreadedZMQSocketChannel
 from jupyter_core.paths import jupyter_data_dir
 from traitlets.traitlets import Instance, Type, default
 
 from .binding import Binding
 from .kernelspec import HydraKernelSpecManager
 
-if typing.TYPE_CHECKING:
-    from typing import Callable
-
 LOG = logging.getLogger(__name__)
 HYDRA_DATA_DIR = os.path.join(jupyter_data_dir(), "hydra-kernel")
-pathlib.Path(HYDRA_DATA_DIR).mkdir(exist_ok=True)
 
 
 class HydraChannel(ZMQSocketChannel):
@@ -105,6 +98,8 @@ class HydraMultiKernelManager(AsyncMultiKernelManager):
     connection_dir = HYDRA_DATA_DIR
 
     def pre_start_kernel(self, kernel_name, kwargs):
+        pathlib.Path(HYDRA_DATA_DIR).mkdir(exist_ok=True)
+
         # NOTE(jason): Must of this is lifted from the superclass implementation.
         # The main reason is that we need to pass an additional keyword argument
         # into the kernel manager ctor; the superclass only allows a small
