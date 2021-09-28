@@ -11,6 +11,7 @@ from IPython.core.magic_arguments import (
     magic_arguments,
     parse_argstring,
 )
+from jupyter_client.utils import run_sync
 
 if typing.TYPE_CHECKING:
     from .binding import BindingManager
@@ -104,8 +105,8 @@ class BindingMagics(Magics):
     def subkernel_upload(self, line):
         """Upload a file/directory to a subkernel's file system."""
         args = parse_argstring(self.subkernel_upload, line)
-        self.upload_handler(
-            self.binding_manager.get(args.name, args.local_path, args.remote_path)
+        run_sync(self.upload_handler)(
+            self.binding_manager.get(args.name), args.local_path, args.remote_path
         )
 
     @magic_arguments()
@@ -116,6 +117,6 @@ class BindingMagics(Magics):
     def subkernel_download(self, line):
         """Download a file/directory from a subkernel's file system."""
         args = parse_argstring(self.subkernel_download, line)
-        self.download_handler(
-            self.binding_manager.get(args.name, args.remote_path, args.local_path)
+        run_sync(self.download_handler)(
+            self.binding_manager.get(args.name), args.remote_path, args.local_path
         )

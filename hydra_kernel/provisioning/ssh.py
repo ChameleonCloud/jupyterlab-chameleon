@@ -20,8 +20,10 @@ import pathlib
 import re
 import shlex
 import sys
+import tarfile
 import tempfile
 import typing
+import uuid
 from contextlib import contextmanager, redirect_stdout
 
 import ansible_runner
@@ -113,12 +115,10 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await proc.communicate()
+            stdout, stderr = await proc.communicate()
             if proc.returncode != 0:
                 LOG.warning(
-                    (
-                        f"Failed to update host key for {self.host}: {proc.stderr.decode('utf-8')}"
-                    )
+                    (f"Failed to update host key for {self.host}: {stderr.read()}")
                 )
 
             lines.append(start)
@@ -241,10 +241,29 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
         self._kernelspecs = None
 
     async def upload_path(self, local_path: "str", remote_path: "str" = None):
-        pass
+        req_id = uuid.uuid4()
+        tmp_archive = f"/tmp/{req_id}.tar.gz"
+        fd = io.BytesIO()
+        path = pathlib.Path(local_path)
+        if path.is_file():
+            arcname = path.name
+        else:
+            arcname = "."
+        with tarfile.open(fileobj=fd, mode="w:gz") as tar:
+            tar.add(local_path, arcname=arcname)
+        fd.seek(0)
+        self.connection.put_file(fd, tmp_archive)
+        self.connection.exec(["tar", "xzf", tmp_archive, "-C", remote_path])
+        self.connection.exec(["rm", "-f", tmp_archive])
 
     async def download_path(self, remote_path: "str", local_path: "str" = None):
-        self.connection.get_file(remote_path)
+        req_id = uuid.uuid4()
+        tmp_archive = f"/tmp/{req_id}.tar.gz"
+        self.connection.exec(["tar", "czf", tmp_archive, "-C", remote_path, "."])
+        with self.connection.get_file(tmp_archive) as archive_fd:
+            with tarfile.open(fileobj=archive_fd, mode="r") as tar:
+                tar.extractall(local_path)
+        self.connection.exec(["rm", "-f", tmp_archive])
 
     async def _tunnel_to_port(self, port_name: "str", lport: "int" = None) -> "int":
         stream = io.StringIO()
@@ -441,6 +460,11 @@ class SSHConnection(object):
                 scp.get(path, tmpf.name)
                 tmpf.seek(0)
                 yield tmpf
+
+    def put_file(self, fileobj: "io.BytesIO", path: "str"):
+        with self._ssh_connect() as ssh:
+            scp = SCPClient(ssh.get_transport())
+            scp.putfo(fileobj, path)
 
     def _ssh_connect(self) -> "SSHClient":
         parent = self.parent

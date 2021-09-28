@@ -343,21 +343,29 @@ class HydraKernel(IPythonKernel):
         self, binding: "Binding", local_path: "str", remote_path: "str" = None
     ):
         km = await self._subkernel_manager(binding)
+        # A bit of a hack to get the status text in the right state ;_;
+        self.on_subkernel_connect(binding.name)
 
         if not hasattr(km.provisioner, "upload_path"):
             raise ValueError(f"Upload not supported for {binding.name}")
 
+        binding.update_progress("Busy")
         await km.provisioner.upload_path(local_path, remote_path)
+        binding.update_progress("Idle")
 
     async def subkernel_download(
         self, binding: "Binding", remote_path: "str", local_path: "str" = None
     ):
         km = await self._subkernel_manager(binding)
+        # A bit of a hack to get the status text in the right state ;_;
+        self.on_subkernel_connect(binding.name)
 
         if not hasattr(km.provisioner, "download_path"):
             raise ValueError(f"Download not supported for {binding.name}")
 
+        binding.update_progress("Busy")
         await km.provisioner.download_path(local_path, remote_path)
+        binding.update_progress("Idle")
 
     def on_subkernel_ports_changed(self, change):
         km: "HydraKernelManager" = change["owner"]
