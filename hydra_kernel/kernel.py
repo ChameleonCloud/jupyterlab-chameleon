@@ -349,7 +349,6 @@ class HydraKernel(IPythonKernel):
         if not hasattr(km.provisioner, "upload_path"):
             raise ValueError(f"Upload not supported for {binding.name}")
 
-        binding.update_progress("Busy")
         await km.provisioner.upload_path(local_path, remote_path)
         binding.update_progress("Idle")
 
@@ -363,7 +362,6 @@ class HydraKernel(IPythonKernel):
         if not hasattr(km.provisioner, "download_path"):
             raise ValueError(f"Download not supported for {binding.name}")
 
-        binding.update_progress("Busy")
         await km.provisioner.download_path(remote_path, local_path)
         binding.update_progress("Idle")
 

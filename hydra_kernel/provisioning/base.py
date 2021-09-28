@@ -1,5 +1,8 @@
 import asyncio
+import io
+import pathlib
 import signal
+import tarfile
 import typing
 
 from jupyter_client.provisioning import KernelProvisionerBase
@@ -48,3 +51,22 @@ class HydraKernelProvisioner(KernelProvisionerBase):
         such that has_process returns false.
         """
         pass
+
+
+class FileManagementMixin:
+    async def upload_path(self, local_path: "str", remote_path: "str" = None):
+        raise NotImplementedError("Upload is not supported for this subkernel.")
+
+    async def download_path(self, remote_path: "str", local_path: "str" = None):
+        raise NotImplementedError("Download is not supported for this subkernel.")
+
+    def prepare_upload(self, local_path: "str"):
+        fd = io.BytesIO()
+        path = pathlib.Path(local_path)
+        arcname = "." if path.is_dir() else None
+
+        with tarfile.open(fileobj=fd, mode="w:gz") as tar:
+            tar.add(local_path, arcname=arcname)
+        fd.seek(0)
+
+        return fd

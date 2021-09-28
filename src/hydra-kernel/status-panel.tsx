@@ -250,9 +250,9 @@ class BindingStatus extends React.Component<
       width: `${(binding.progress.progressRatio || 0.0) * 100}%`
     };
     const connectedStateIcon =
-      (binding.progress.progress || '').toLowerCase() === 'busy'
-        ? circleIcon
-        : circleEmptyIcon;
+      (binding.progress.progress || '').toLowerCase() === 'idle'
+        ? circleEmptyIcon
+        : circleIcon;
     const statusIcon =
       binding.state === 'connected' ? connectedStateIcon : offlineBoltIcon;
 

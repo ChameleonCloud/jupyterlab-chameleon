@@ -15,6 +15,7 @@ import asyncio
 import io
 import json
 import logging
+import math
 import os
 import pathlib
 import re
@@ -35,7 +36,7 @@ from scp import SCPClient
 from traitlets.traitlets import Bool, Instance, Int, Unicode
 
 from ..binding import BindingConnectionError
-from .base import HydraKernelProvisioner
+from .base import FileManagementMixin, HydraKernelProvisioner
 
 if typing.TYPE_CHECKING:
     from jupyter_client.connect import KernelConnectionInfo
@@ -51,7 +52,7 @@ def _expand_path(path):
     return str(pathlib.Path(path).expanduser().resolve())
 
 
-class SSHHydraKernelProvisioner(HydraKernelProvisioner):
+class SSHHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
     host = Unicode()
     user = Unicode()
     private_key_file = Unicode()
@@ -243,24 +244,37 @@ class SSHHydraKernelProvisioner(HydraKernelProvisioner):
     async def upload_path(self, local_path: "str", remote_path: "str" = None):
         req_id = uuid.uuid4()
         tmp_archive = f"/tmp/{req_id}.tar.gz"
-        fd = io.BytesIO()
-        path = pathlib.Path(local_path)
-        if path.is_file():
-            arcname = path.name
-        else:
-            arcname = "."
-        with tarfile.open(fileobj=fd, mode="w:gz") as tar:
-            tar.add(local_path, arcname=arcname)
-        fd.seek(0)
-        self.connection.put_file(fd, tmp_archive)
+
+        self.binding.update_progress("Preparing upload")
+        fd = self.prepare_upload(local_path)
+
+        def _on_progress(filename, size, sent):
+            self.binding.update_progress(
+                f"Uploading ({math.floor((sent/size) * 100)}%)"
+            )
+
+        self.connection.put_file(fd, tmp_archive, on_progress=_on_progress)
+
+        self.binding.update_progress("Finishing")
         self.connection.exec(["tar", "xzf", tmp_archive, "-C", remote_path])
         self.connection.exec(["rm", "-f", tmp_archive])
 
     async def download_path(self, remote_path: "str", local_path: "str" = None):
         req_id = uuid.uuid4()
         tmp_archive = f"/tmp/{req_id}.tar.gz"
+
+        self.binding.update_progress("Preparing download")
         self.connection.exec(["tar", "czf", tmp_archive, "-C", remote_path, "."])
-        with self.connection.get_file(tmp_archive) as archive_fd:
+
+        def _on_progress(filename, size, sent):
+            self.binding.update_progress(
+                f"Downloading ({math.floor((sent/size) * 100)}%)"
+            )
+
+        with self.connection.get_file(
+            tmp_archive, on_progress=_on_progress
+        ) as archive_fd:
+            self.binding.update_progress("Finishing")
             with tarfile.open(fileobj=archive_fd, mode="r") as tar:
                 tar.extractall(local_path)
         self.connection.exec(["rm", "-f", tmp_archive])
@@ -453,17 +467,17 @@ class SSHConnection(object):
         return json.load(stdout)
 
     @contextmanager
-    def get_file(self, path: "str") -> "io.BytesIO":
+    def get_file(self, path: "str", on_progress=None) -> "io.BytesIO":
         with self._ssh_connect() as ssh:
-            scp = SCPClient(ssh.get_transport())
+            scp = SCPClient(ssh.get_transport(), progress=on_progress)
             with tempfile.NamedTemporaryFile() as tmpf:
                 scp.get(path, tmpf.name)
                 tmpf.seek(0)
                 yield tmpf
 
-    def put_file(self, fileobj: "io.BytesIO", path: "str"):
+    def put_file(self, fileobj: "io.BytesIO", path: "str", on_progress=None):
         with self._ssh_connect() as ssh:
-            scp = SCPClient(ssh.get_transport())
+            scp = SCPClient(ssh.get_transport(), progress=on_progress)
             scp.putfo(fileobj, path)
 
     def _ssh_connect(self) -> "SSHClient":

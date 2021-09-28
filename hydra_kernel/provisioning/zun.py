@@ -13,6 +13,7 @@
 # limitations under the License.
 import argparse
 import asyncio
+import base64
 import io
 import json
 import logging
@@ -26,9 +27,10 @@ from keystoneauth1 import loading
 from keystoneauth1.adapter import Adapter
 from traitlets.traitlets import Unicode
 
-from .base import HydraKernelProvisioner
+from .base import FileManagementMixin, HydraKernelProvisioner
 
 if typing.TYPE_CHECKING:
+    from tarfile import TarFile
     from typing import Any, Dict, List, Optional
 
 LOG = logging.getLogger(__name__)
@@ -52,7 +54,11 @@ class ZunClient(object):
     def __init__(self, session, container_uuid=None):
         self._uuid = container_uuid
         self._session = Adapter(
-            session=session, service_type="container", interface="public"
+            session=session,
+            service_type="container",
+            interface="public",
+            # 1.25 - support for encode/decode archive file
+            default_microversion="1.25",
         )
 
     def get_container(self):
@@ -80,12 +86,7 @@ class ZunClient(object):
                 "Cannot connect: container does not set JUPYTER_RUNTIME_DIR in environment"
             )
 
-        res = self._session.get(
-            f"/containers/{self._uuid}/get_archive?path={runtime_dir}"
-        )
-        connection_tar_data: str = res.json()["data"]
-        fd = io.BytesIO(connection_tar_data.encode("utf-8"))
-        with tarfile.open(fileobj=fd, mode="r") as tar:
+        with self.download_path(runtime_dir) as tar:
             # Sort by mtime to get the latest connection file written by the
             # container process.
             conn_files = sorted(
@@ -124,8 +125,22 @@ class ZunClient(object):
     def kill_container(self, signum=signal.SIGKILL):
         return self._session.post(f"/containers/{self._uuid}/kill?signal={int(signum)}")
 
+    def download_path(self, source_path: "str") -> "TarFile":
+        res = self._session.get(
+            f"/containers/{self._uuid}/get_archive?path={source_path}&encode_data=True"
+        )
+        tar_data: str = res.json()["data"]
+        fd = io.BytesIO(base64.decodebytes(tar_data.encode("utf-8")))
+        return tarfile.open(fileobj=fd, mode="r")
 
-class ZunHydraKernelProvisioner(HydraKernelProvisioner):
+    def upload_path(self, dest_path: "str", contents: "io.BytesIO"):
+        self._session.post(
+            f"/containers/{self._uuid}/put_archive?path={dest_path}&decode_data=True",
+            json={"data": base64.encodebytes(contents.read()).decode("utf-8")},
+        )
+
+
+class ZunHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
     container_uuid = Unicode()
 
     poll_interval = 5.0
@@ -201,3 +216,14 @@ class ZunHydraKernelProvisioner(HydraKernelProvisioner):
     def get_shutdown_wait_time(self, recommended: float = 5) -> float:
         # Allow containers to take upwards of 30 seconds to tear down
         return max(recommended, 30.0)
+
+    async def upload_path(self, local_path: "str", remote_path: "str" = None):
+        self.binding.update_progress("Preparing upload")
+        fd = self.prepare_upload(local_path)
+        self.binding.update_progress("Uploading")
+        self.zun.upload_path(remote_path, fd)
+
+    async def download_path(self, remote_path: "str", local_path: "str" = None):
+        self.binding.update_progress("Downloading")
+        with self.zun.download_path(remote_path) as tar:
+            tar.extractall(local_path)
