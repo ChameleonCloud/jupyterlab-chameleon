@@ -364,7 +364,7 @@ class HydraKernel(IPythonKernel):
             raise ValueError(f"Download not supported for {binding.name}")
 
         binding.update_progress("Busy")
-        await km.provisioner.download_path(local_path, remote_path)
+        await km.provisioner.download_path(remote_path, local_path)
         binding.update_progress("Idle")
 
     def on_subkernel_ports_changed(self, change):
