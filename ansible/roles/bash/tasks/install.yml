@@ -1,5 +1,10 @@
 ---
-- ansible.builtin.pip:
-    name: bash_kernel
+- name: "Install pip packages"
+  ansible.builtin.pip:
+    name: "{{ item }}"
+  loop:
+    - ipkyernel
+    - bash_kernel
 
-- ansible.builtin.shell: "python -m bash_kernel.install"
+- name: "Install bash kernelspec"
+  ansible.builtin.shell: "python -m bash_kernel.install"
