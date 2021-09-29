@@ -151,10 +151,10 @@ class SSHHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
     async def launch_kernel(self, command, **kwargs):
         self.binding.update_progress("Establishing secure connection")
 
-        LOG.info(f"{self.binding.name}: kernel_cmd={command}")
+        LOG.debug(f"{self.binding.name}: kernel_cmd={command}")
         subkernel = self.connection.exec_json(command, login=True)
         self._subkernel_connection = subkernel["connection"]
-        LOG.info(f"{self.binding.name}: connection={self._subkernel_connection}")
+        LOG.debug(f"{self.binding.name}: connection={self._subkernel_connection}")
 
         conn_info = self._subkernel_connection.copy()
 
@@ -493,7 +493,7 @@ class SSHConnection(object):
             RejectPolicy if parent.host_key_checking else AutoAddPolicy
         )
         try:
-            LOG.info(
+            LOG.debug(
                 f"connecting, host={parent.host}, user={parent.user}, key={parent.private_key_file}"
             )
             client.connect(

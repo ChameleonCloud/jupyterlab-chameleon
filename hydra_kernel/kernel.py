@@ -196,7 +196,6 @@ class HydraKernel(IPythonKernel):
 
     def on_comm_msg(self, message: "dict"):
         payload = message.get("content", {}).get("data", {})
-        LOG.info(f"Got message: {payload}")
         if payload["event"] == "binding_list_request":
             # Attempt to restore bindings set as part of initialization from
             # kernel client.
@@ -322,7 +321,7 @@ class HydraKernel(IPythonKernel):
                     binding.kernel, binding=binding
                 )
             except Exception as exc:
-                self.log.exception(f"Failed to start subkernel for '{binding_name}'")
+                self.log.exception(f"{binding_name}: failed to start subkernel")
                 self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)
                 error_message = str(exc)
                 if isinstance(exc, OSError):
@@ -342,6 +341,7 @@ class HydraKernel(IPythonKernel):
     async def subkernel_upload(
         self, binding: "Binding", local_path: "str", remote_path: "str" = None
     ):
+        self.log.info(f"{binding.name}: uploading {local_path} to {remote_path}")
         km = await self._subkernel_manager(binding)
         # A bit of a hack to get the status text in the right state ;_;
         self.on_subkernel_connect(binding.name)
@@ -355,6 +355,7 @@ class HydraKernel(IPythonKernel):
     async def subkernel_download(
         self, binding: "Binding", remote_path: "str", local_path: "str" = None
     ):
+        self.log.info(f"{binding.name}: downloading {remote_path} to {local_path}")
         km = await self._subkernel_manager(binding)
         # A bit of a hack to get the status text in the right state ;_;
         self.on_subkernel_connect(binding.name)
@@ -367,6 +368,7 @@ class HydraKernel(IPythonKernel):
 
     def on_subkernel_ports_changed(self, change):
         km: "HydraKernelManager" = change["owner"]
+        self.log.info(f"{km.binding.name}: ports changed, stopping client")
         kc = self._clients.pop(km, None)
         if kc:
             kc.stop_channels()

@@ -67,7 +67,6 @@ class LocalHydraKernelProvisioner(HydraKernelProvisioner):
             # Reset stream for reading
             tmpf.seek(0)
             stdout = io.BytesIO(tmpf.read())
-            LOG.info(process.returncode)
             if process.returncode > 0:
                 raise RuntimeError(stdout.read())
             subkernel = json.load(stdout)
@@ -81,7 +80,7 @@ class LocalHydraKernelProvisioner(HydraKernelProvisioner):
 
     async def send_signal(self, signum: int) -> None:
         try:
-            LOG.info(f"kill -{signum} {self.pid}")
+            LOG.debug(f"kill -{signum} {self.pid}")
             os.kill(self.pid, signum)
         except ProcessLookupError:
             self.reset()

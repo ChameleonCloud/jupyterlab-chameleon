@@ -1,8 +1,10 @@
 import logging
+import os
 
 from .kernel import HydraKernel, __version__
 
-DEBUG = True
+DEBUG = os.environ.get("HYDRA_KERNEL_DEBUG", "0") == "1"
+
 if DEBUG:
     log_level = logging.DEBUG
     paramiko_level = logging.DEBUG
@@ -11,7 +13,7 @@ else:
     # Paramiko is very chatty
     paramiko_level = logging.WARN
 
-logging.basicConfig(handlers=[logging.FileHandler("hydra.log")], level=log_level)
+logging.basicConfig(level=log_level)
 logging.getLogger("paramiko").setLevel(paramiko_level)
 
 __all__ = ["__version__", "HydraKernel"]
