@@ -28,6 +28,7 @@ from keystoneauth1.adapter import Adapter
 from traitlets.traitlets import Unicode
 
 from .base import FileManagementMixin, HydraKernelProvisioner
+from ..traitlets import EntryPointType
 
 if typing.TYPE_CHECKING:
     from tarfile import TarFile
@@ -36,7 +37,7 @@ if typing.TYPE_CHECKING:
 LOG = logging.getLogger(__name__)
 
 
-def keystone_session():
+def default_auth_provider():
     fake_argv = []
     parser = argparse.ArgumentParser()
     loading.cli.register_argparse_arguments(parser, fake_argv)
@@ -143,7 +144,25 @@ class ZunClient(object):
 class ZunHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
     container_uuid = Unicode()
 
+    auth_provider = EntryPointType("hydra_kernel.zun_provisioner.auth_provider")
+    _auth_provider_factory = None
+
     poll_interval = 5.0
+
+    @property
+    def auth_provider_factory(self):
+        if not self._auth_provider_factory:
+            for key, entry_point in self.auth_provider.load_entry_points().items():
+                try:
+                    self._auth_provider_factory = entry_point.load()
+                except Exception as e:
+                    self.log.debug(
+                        "Failed to load %s entrypoint %r: %r",
+                        self.auth_provider.entry_point_group,
+                        key,
+                        e,
+                    )
+        return self._auth_provider_factory
 
     @property
     def has_process(self) -> bool:
@@ -156,9 +175,15 @@ class ZunHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
     async def send_signal(self, signum: "int") -> None:
         self.zun.kill_container(signum)
 
+    def _get_session(self):
+        if callable(self.auth_provider_factory):
+            return self.auth_provider_factory()
+        else:
+            return default_auth_provider()
+
     async def pre_launch(self, **kwargs: "Any") -> "Dict[str, Any]":
         kwargs = await super().pre_launch(**kwargs)
-        session = keystone_session()
+        session = self._get_session()
         self.neutron = Adapter(
             session=session,
             service_type="network",
