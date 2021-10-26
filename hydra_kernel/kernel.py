@@ -368,17 +368,17 @@ class HydraKernel(IPythonKernel):
 
     def on_subkernel_ports_changed(self, change):
         km: "HydraKernelManager" = change["owner"]
-        self.log.info(f"{km.binding.name}: ports changed, stopping client")
+        self.log.debug(f"{km.binding.name}: ports changed, stopping client")
         kc = self._clients.pop(km, None)
         if kc:
             kc.stop_channels()
 
     def on_subkernel_restart(self, binding_name):
-        self.log.info(f"{binding_name}: subkernel restarted")
+        self.log.debug(f"{binding_name}: subkernel restarted")
         self.binding_manager.set(binding_name, state=BindingState.RESTARTED)
 
     def on_subkernel_connect(self, binding_name):
-        self.log.info(f"{binding_name}: subkernel connected")
+        self.log.debug(f"{binding_name}: subkernel connected")
         self.binding_manager.set(binding_name, state=BindingState.CONNECTED)
 
     def on_subkernel_disconnect(self, binding_name, since_last_heartbeat):
@@ -386,5 +386,5 @@ class HydraKernel(IPythonKernel):
         # heartbeat failure can trigger a few times. Wait until some timeout
         # to actually trip the state to disconnected.
         if since_last_heartbeat > KERNEL_HEARTBEAT_TIMEOUT:
-            self.log.info(f"{binding_name}: subkernel disconnected")
+            self.log.debug(f"{binding_name}: subkernel disconnected")
             self.binding_manager.set(binding_name, state=BindingState.DISCONNECTED)

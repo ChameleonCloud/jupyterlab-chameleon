@@ -55,7 +55,7 @@ def _expand_path(path):
 class SSHHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
     host = Unicode()
     user = Unicode()
-    private_key_file = Unicode()
+    private_key_file = Unicode(allow_none=True)
     timeout = Int(DEFAULT_SSH_TIMEOUT)
     sudo = Bool(False)
     host_key_checking = Bool(
@@ -135,9 +135,9 @@ class SSHHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
 
         # Check if desired kernel exists on remote
         self.binding.update_progress("Checking host kernels")
-        if not await self.has_remote_kernelspec(self.subkernel_name):
+        if not await self.has_hydra_kernelspec(self.subkernel_name):
             self.binding.update_progress(f"Installing {self.subkernel_name} kernel")
-            await self.provision_remote_kernelspec(self.subkernel_name)
+            await self.provision_hydra_kernelspec(self.subkernel_name)
 
         kwargs["cmd"] = [
             "hydra-agent",
@@ -190,7 +190,17 @@ class SSHHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
                 pass
         self._tunnels = {}
 
-    async def has_remote_kernelspec(self, kernel_name):
+    async def has_hydra_kernelspec(self, kernel_name):
+        try:
+            ret, _, _ = self.connection.exec("which hydra-subkernel")
+            if ret != 0:
+                return False
+        except RuntimeError as exc:
+            LOG.error(
+                f"Failed to check for hydra binaries on {self.binding_name}: {exc}"
+            )
+            return False
+
         if not self._kernelspecs:
             LOG.info(f"Fetching all kernel specs for '{self.binding.name}'")
             try:
@@ -198,7 +208,7 @@ class SSHHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
                     "jupyter kernelspec list --json --log-level ERROR", login=True
                 )["kernelspecs"]
             except RuntimeError as exc:
-                LOG.warn((f"Failed to list kernel specs on {self.binding.name}: {exc}"))
+                LOG.warn(f"Failed to list kernel specs on {self.binding.name}: {exc}")
                 return False
 
         for spec_name, spec_info in self._kernelspecs.items():
@@ -208,7 +218,7 @@ class SSHHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
 
         return False
 
-    async def provision_remote_kernelspec(self, kernel_name):
+    async def provision_hydra_kernelspec(self, kernel_name):
         ansible_dir = os.path.join(sys.prefix, "share", "hydra-kernel", "ansible")
         host_vars = {
             "ansible_host": self.host,
@@ -235,7 +245,7 @@ class SSHHydraKernelProvisioner(FileManagementMixin, HydraKernelProvisioner):
                     json_mode=True,
                 )
                 LOG.debug(runner.stdout.read())
-                if runner.errored:
+                if runner.status != "successful" or runner.errored:
                     raise RuntimeError(f"Failed to install kernel {kernel_name}")
 
         # Invalidate kernelspecs as we have installed a new one
