@@ -74,6 +74,7 @@
     "@jupyterlab/filebrowser": "^3.0.0",
     "@jupyterlab/filebrowser-extension": "^3.0.0",
     "@jupyterlab/fileeditor": "^3.0.0",
+    "@jupyterlab/hub-extension": "^3.0.0",
     "@jupyterlab/mainmenu": "^3.0.0",
     "@jupyterlab/notebook": "^3.0.0",
     "@jupyterlab/observables": "^4.0.0",

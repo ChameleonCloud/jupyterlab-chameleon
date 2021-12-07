@@ -4,9 +4,15 @@ import {
 } from '@jupyterlab/application';
 import { Dialog } from '@jupyterlab/apputils';
 import { URLExt } from '@jupyterlab/coreutils';
+import { CommandIDs } from '@jupyterlab/hub-extension';
 import { ServerConnection } from '@jupyterlab/services';
+import { CommandRegistry } from '@lumino/commands';
 
 class Heartbeat {
+  constructor(commands: CommandRegistry) {
+    this._commands = commands
+  }
+
   start() {
     this.stop();
     this._heartbeatTimer = window.setInterval(async () => {
@@ -33,9 +39,13 @@ class Heartbeat {
       console.debug(`Session ok until ${json.expires_at}`);
     } else if (response.status === 401) {
       this.stop();
-      await this._reauthenticate(
-        json.reauthenticate_link || document.location.href
-      );
+      if (json.reauthenticate_link) {
+        await this._reauthenticate(json.reauthenticate_link);
+      } else {
+        console.warn('User backend session timed out, yet there was no reauthenticate link provided.');
+        // TODO: this assumes the extension is running w/in a Hub environment, really.
+        this._commands.execute(CommandIDs.logout);
+      }
     } else if (response.status === 405) {
       this.stop();
       console.debug('Disabling session heartbeat; hearbeat not supported.');
@@ -51,16 +61,21 @@ class Heartbeat {
 
     const result = await dialog.launch();
     dialog.dispose();
+
     if (result.button.accept) {
-      if (redirectUrl) {
-        redirectUrl = `${redirectUrl}?next=${document.location.pathname}`;
-        document.location.href = redirectUrl;
-      } else {
-        document.location.reload();
-      }
+      redirectUrl = `${redirectUrl}?next=${document.location.pathname}`;
+      // A bit hacky, construct a form and manually POST it. This is attempting to
+      // solve a problem w/ the refresh flow not executing properly in some cases.
+      const form = document.createElement('form')
+      form.method = 'POST'
+      form.action = redirectUrl
+      form.style.display = 'hidden';
+      document.body.appendChild(form);
+      form.submit();
     }
   }
 
+  private _commands: CommandRegistry = null;
   private _heartbeatTimer: number = null;
   private _interval = 60000; // ms
   private _serverSettings = ServerConnection.makeSettings();
@@ -77,7 +92,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
   activate(app: JupyterFrontEnd) {
     Promise.all([app.restored])
       .then(async () => {
-        const heartbeat = new Heartbeat();
+        const heartbeat = new Heartbeat(app.commands);
         heartbeat.start();
       })
       .catch(err => {
