@@ -64,14 +64,7 @@ class Heartbeat {
 
     if (result.button.accept) {
       redirectUrl = `${redirectUrl}?next=${document.location.pathname}`;
-      // A bit hacky, construct a form and manually POST it. This is attempting to
-      // solve a problem w/ the refresh flow not executing properly in some cases.
-      const form = document.createElement('form')
-      form.method = 'POST'
-      form.action = redirectUrl
-      form.style.display = 'hidden';
-      document.body.appendChild(form);
-      form.submit();
+      document.location.href = redirectUrl;
     }
   }
 
