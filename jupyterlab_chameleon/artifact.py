@@ -1,3 +1,5 @@
+import tarfile
+
 from dataclasses import asdict
 import json
 import os
@@ -58,10 +60,10 @@ class ArtifactArchiver(LoggingConfigurable):
               'all file sizes (in bytes) in the archive must be less than this '
               'number. Defaults to 500MB.'))
 
-    MIME_TYPE = 'application/zip'
+    MIME_TYPE = 'application/tar+gz'
 
     def package(self, path: str) -> str:
-        """Create zip file filename from directory
+        """Create gzipped tar file filename from directory
 
         Args:
             path (str): absolute path to directory to be zipped.
@@ -84,10 +86,10 @@ class ArtifactArchiver(LoggingConfigurable):
             raise ValueError('Input path must be a directory')
 
         temp_dir = tempfile.mkdtemp()
-        archive = os.path.join(temp_dir, f'{os.path.basename(path)}.zip')
+        archive = os.path.join(temp_dir, f'{os.path.basename(path)}.tar.gz')
         total_size = 0
 
-        with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        with tarfile.open(archive, 'w:gz') as tarf:
             for root, _, files in os.walk(path):
                 for f in files:
                     absfile = os.path.join(root, f)
@@ -98,7 +100,7 @@ class ArtifactArchiver(LoggingConfigurable):
                         if total_size > self.max_archive_size:
                             raise ValueError('Exceeded max archive size')
                     # Remove leading path information
-                    zipf.write(absfile, arcname=absfile.replace(path, ''))
+                    tarf.add(absfile, arcname=absfile.replace(path, ''))
 
         size_mb = total_size / 1024 / 1024
         self.log.info(
@@ -138,6 +140,12 @@ class ArtifactArchiver(LoggingConfigurable):
         size_mb = stat.st_size / 1024 / 1024
         self.log.info((
             f'Uploading {path} ({size_mb:.2f}MB) to {publish_url}'))
+
+        publish_headers.update({
+            'content-type': self.MIME_TYPE,
+            'content-disposition': f'attachment; filename={os.path.basename(path)}',
+            'content-length': str(stat.st_size),
+        })
 
         with open(path, 'rb') as f:
             res = requests.request(
