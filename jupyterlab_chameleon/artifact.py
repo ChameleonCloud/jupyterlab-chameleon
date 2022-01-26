@@ -124,7 +124,6 @@ class ArtifactArchiver(LoggingConfigurable):
             requests.exceptions.HTTPError: if the upload fails.
         """
         upload = self.prepare_upload()
-        deposition_id = upload.get('deposition_id')
         publish_endpoint = upload.get('publish_endpoint', {})
         publish_url = publish_endpoint.get('url')
         publish_method = publish_endpoint.get('method', 'POST')
@@ -133,7 +132,7 @@ class ArtifactArchiver(LoggingConfigurable):
             'content-type': self.MIME_TYPE,
         })
 
-        if not (deposition_id and publish_url):
+        if not publish_url:
             raise ValueError('Malformed upload request')
 
         stat = os.stat(path)
@@ -153,7 +152,12 @@ class ArtifactArchiver(LoggingConfigurable):
                 data=f)
             res.raise_for_status()
 
-        return deposition_id
+        info = res.json()
+        self.log.info(f"Uploaded artifact: {info}")
+
+        urn = info["contents"]["urn"]
+
+        return urn.split(":")[-1]
 
 
 class ArtifactHandler(APIHandler, ErrorResponder):
