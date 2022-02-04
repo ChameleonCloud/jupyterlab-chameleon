@@ -287,7 +287,16 @@ class FileBrowserHelper {
     let artifact = await this._artifactRegistry.getArtifact(item.path);
     if (!artifact) {
       // Generate a new placeholder artifact for the given path.
-      artifact = { path: item.path };
+      artifact = {
+        authors: [],
+        linked_projects: [],
+        reproducibility: undefined,
+        tags: [],
+        versions: [],
+        path: item.path,
+        currentVersion: 0,
+        ownership: 'fork'
+      };
     }
     return artifact;
   }

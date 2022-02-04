@@ -4,22 +4,112 @@ from dataclasses import asdict
 import json
 import os
 import tempfile
-import zipfile
 
 from keystoneauth1.exceptions.http import Unauthorized
 from jupyter_server.base.handlers import APIHandler
 import requests
 from tornado import web
-from traitlets import Any, CRegExp, Int, Unicode
+from traitlets import Any, CRegExp, Int
 from traitlets.config import LoggingConfigurable
 
-from .db import Artifact, DB
-from .exception import AuthenticationError, BadRequestError, IllegalArchiveError
-from .util import call_jupyterhub_api, ErrorResponder
+from .db import DB
+from .exception import AuthenticationError, IllegalArchiveError
+from .trovi import contents_url, get_trovi_token
+from .util import ErrorResponder
 
 import logging
 LOG = logging.getLogger(__name__)
 
+class ArtifactAuthor:
+    def __init__(self, full_name, email, affiliation=None):
+        """
+        An author of an artifact
+
+        Attrs:
+            full_name (str): the full name of the author
+            affiliation (str): the institution/organization with which the author
+                is affiliated
+            email (str): the author's email address
+        """
+        self.full_name = full_name
+        self.affiliation = affiliation
+        self.email = email
+
+
+class ArtifactVersion:
+    def __init__(
+            self, contents_location, contents_id, links=None, created_at=None, slug=None
+    ):
+        """
+        A version of an artifact
+
+        Attrs:
+            contents_location (str): represents where the contents are stored
+            contents_id (str): an ID which is used to look up the contents at the
+                storage location
+            links (list[str]): a URN which represents a link relevant to the artifact
+            created_at (datetime): the time at which this version was created
+            slug (str): the slug for this version's URL
+        """
+        self.contents_location = contents_location
+        self.contents_id = contents_id
+        self.links = links or []
+        self.created_at = created_at
+        self.slug = slug
+
+    @property
+    def contents_urn(self):
+        return f"urn:{self.contents_location}:{self.contents_id}"
+
+
+class Artifact:
+    """A shared experiment/research artifact that can be spawned in JupyterHub.
+
+    Attrs:
+        deposition_repo (str): the name of the deposition repository (e.g.,
+            "zenodo" or "chameleon")
+        deposition_id (str): the ID of the deposition within the repository.
+        id (str): the external Trovi ID of the artifact linked to this
+            deposition. Default = None.
+        tags (list[str]): a list of tags used to categorize this artifact.
+        authors (list[ArtifactAuthor]): a list of the authors of this artifact
+        linked_projects (list[str]): a list of URNs representing projects to which
+            this artifact is linked.
+        repro_enable_requests (bool): flag which allows external users to request
+            to reproduce this artifact's experiment. Default = False
+        repro_access_hours (int): the number of hours given to external users to
+            reproduce this artifact's experiments.
+        repro_requests (int): the number of reproduction requests made to this artifact
+        versions (list[ArtifactVersion]): a list of all versions of this artifact
+        ownership (str): the requesting user's ownership status of this
+            artifact. Default = "fork".
+    """
+
+    def __init__(
+            self,
+            id=None,
+            tags=None,
+            authors=None,
+            linked_projects=None,
+            repro_enable_requests=False,
+            repro_access_hours=None,
+            repro_requests=None,
+            versions=None,
+    ):
+        self.id = id
+        self.tags = tags or []
+        self.authors = authors or []
+        self.linked_projects = linked_projects or []
+        self.repro_enable_requests = repro_enable_requests
+        self.repro_access_hours = repro_access_hours
+        self.repro_requests = repro_requests
+        self.versions = versions or []
+
+        # Only the deposition information is required. Theoretically this can
+        # allow importing arbitrary Zenodo DOIs or from other sources that are
+        # not yet existing on Trovi.
+        if not versions:
+            raise ValueError("Missing artifact contents")
 
 def default_prepare_upload():
     """Prepare an upload to the external storage tier.
@@ -32,7 +122,16 @@ def default_prepare_upload():
                 :method: the request method
                 :headers: any headers to include in the request
     """
-    return call_jupyterhub_api('share/prepare_upload')
+    trovi_token = get_trovi_token()
+
+    response = {
+        "publish_endpoint": {
+            "url": contents_url(trovi_token),
+            "method": "POST",
+        },
+    }
+
+    return json.dumps(response)
 
 
 class ArtifactArchiver(LoggingConfigurable):
@@ -51,9 +150,6 @@ class ArtifactArchiver(LoggingConfigurable):
         default_value=r"(\.chameleon|\.ipynb_checkpoints|\.git|\.ssh)/.*$",
         help=('A regex pattern of files/directories to ignore when packaaging'
               'the archive.'))
-
-    swift_container = Unicode(config=True, default_value='trovi',
-        help='The name of the Swift container to upload the archive to.')
 
     max_archive_size = Int(config=True, default_value=(1024 * 1024 * 500),
         help=('The maximum size of the archive, before compression. The sum of '
@@ -109,13 +205,13 @@ class ArtifactArchiver(LoggingConfigurable):
         return archive
 
     def publish(self, path: str) -> str:
-        """Upload an artifact archive to Swift.
+        """Upload an artifact archive to Swift via the Trovi API.
 
         Args:
             path (str): the full path to the archive file.
 
         Returns:
-            str: the ID of the uploaded artifact, which corresponds to the object
+            str: the URN of the uploaded content, which corresponds to the object
                 name in the Swift container.
 
         Raises:
@@ -178,7 +274,6 @@ class ArtifactHandler(APIHandler, ErrorResponder):
 
         try:
             body = json.loads(self.request.body.decode('utf-8'))
-            id = body.get('id')
 
             path = self._normalize_path(body.get('path', '.'))
 
@@ -187,21 +282,10 @@ class ArtifactHandler(APIHandler, ErrorResponder):
                     'Archive source must be in notebook directory')
 
             archiver = ArtifactArchiver(config=self.config)
-            deposition_id = archiver.publish(archiver.package(path))
-
-            artifact = Artifact(
-                id=id, path=path.replace(f'{self.notebook_dir}', '.'),
-                deposition_repo='chameleon', ownership='own')
-            if id:
-                LOG.info(f'Creating new version of {id}')
-            else:
-                self.db.insert_artifact(artifact)
+            contents_urn = archiver.publish(archiver.package(path))
 
             self.set_status(200)
-            self.write({
-                **asdict(artifact),
-                'deposition_id': deposition_id
-            })
+            self.write({'contents_urn': contents_urn})
             return self.finish()
         except (IllegalArchiveError, json.JSONDecodeError) as err:
             return self.error_response(400, str(err))
@@ -221,20 +305,9 @@ class ArtifactHandler(APIHandler, ErrorResponder):
         """
         self.check_xsrf_cookie()
 
+        self.log.warning("WE GOT A PUT FOLKS!!!!!!")
+
         try:
-            body = json.loads(self.request.body.decode('utf-8'))
-            artifact = Artifact(
-                id=body.get('id'),
-                path=(self._normalize_path(body.get('path', '.'))
-                    .replace(f'{self.notebook_dir}', '.')),
-                deposition_repo=body.get('deposition_repo'),
-                ownership=body.get('ownership')
-            )
-
-            if not (artifact.path and artifact.id):
-                raise BadRequestError('Missing "path" or "id" arguments')
-
-            self.db.update_artifact(artifact)
             self.set_status(204)
             return self.finish()
         except json.JSONDecodeError as err:
@@ -248,6 +321,8 @@ class ArtifactHandler(APIHandler, ErrorResponder):
         """List all known uploaded artifacts on this server.
         """
         self.check_xsrf_cookie()
+
+        self.log.warning("WE GOT A GET FOLKS!!!!!!")
 
         try:
             artifacts = [asdict(a) for a in self.db.list_artifacts()]
