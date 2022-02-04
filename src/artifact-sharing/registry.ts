@@ -29,11 +29,8 @@ export class ArtifactRegistry implements IArtifactRegistry {
     // property is used to determine whether to show the "add new version"
     // UI, or the "edit" UI. We have now finished with the "add new version"
     // flow, potentially, so ensure we clean up this property.
-    const newArtifact: Artifact = {
-      ...artifact,
-      deposition_id: null
-    };
-    this._updateArtifacts(newArtifact);
+    // TODO this no longer applies
+    this._updateArtifacts(artifact);
 
     await Private.handleUpdateResponse(res);
   }
@@ -105,10 +102,8 @@ export class ArtifactRegistry implements IArtifactRegistry {
 
 namespace Private {
   export function normalizeArtifact(artifact: Artifact): Artifact {
-    return {
-      ...artifact,
-      path: artifact.path.replace(/^\.\//, '')
-    };
+    artifact.path = artifact.path.replace(/^\.\//, '')
+    return artifact
   }
 
   export function getUrl(settings: ServerConnection.ISettings): string {

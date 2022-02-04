@@ -13,13 +13,55 @@ export interface IArtifactSharingURL {
   isExternalUrl(origin: string): boolean;
 }
 
+class ArtifactAuthor {
+  readonly full_name?: string;
+  readonly affiliation?: string;
+  readonly email?: string;
+}
+
+class ArtifactVersionContents {
+  readonly urn?: string
+}
+
+class ArtifactLink {
+  readonly label: string;
+  readonly urn?: string;
+  readonly verified?: boolean;
+}
+
+class ArtifactReproducibility {
+  readonly enable_requests?: boolean;
+  readonly access_hours?: number;
+  readonly requests?: number;
+}
+
+class ArtifactVersion {
+  readonly contents?: ArtifactVersionContents;
+  readonly links: ArtifactLink[];
+  readonly created_at?: Date;
+  readonly slug?: string;
+}
+
 // Should match jupyterlab_chameleon/db.py:Artifact
 export class Artifact {
-  readonly path: string;
   readonly id?: string;
-  readonly deposition_id?: string; // This can be present during create/update.
-  readonly deposition_repo?: string;
-  readonly ownership?: 'own' | 'fork';
+  readonly title?: string;
+  readonly short_description?: string;
+  readonly long_description?: string;
+  readonly tags: string[];
+  readonly authors: ArtifactAuthor[];
+  readonly linked_projects: string[];
+  readonly reproducibility: ArtifactReproducibility;
+  readonly created_at?: Date;
+  readonly updated_at?: Date;
+  readonly owner_urn?: string;
+  readonly visibility?: 'private' | 'public';
+  readonly versions: ArtifactVersion[];
+
+  readonly currentVersion: number
+  readonly ownership: 'own' | 'fork';
+
+  path: string;
 }
 
 export type Workflow = 'upload' | 'edit';

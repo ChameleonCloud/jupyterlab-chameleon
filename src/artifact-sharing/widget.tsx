@@ -6,10 +6,11 @@ import {
   Artifact,
   Workflow
 } from './tokens';
+import {ChangeEvent, useState} from "react";
 
 enum WidgetState {
   CONFIRM_FORM = 'confirm-form',
-  EMBED_FORM = 'embed-form',
+  ARTIFACT_FORM = 'artifact-form',
   WAITING = 'waiting',
   SUCCESS = 'success'
 }
@@ -177,7 +178,7 @@ export class ArtifactSharingComponent extends React.Component<
         startState = WidgetState.CONFIRM_FORM;
         break;
       case 'edit':
-        startState = WidgetState.EMBED_FORM;
+        startState = WidgetState.ARTIFACT_FORM;
         break;
       default:
         break;
@@ -223,15 +224,10 @@ export class ArtifactSharingComponent extends React.Component<
         // artifact from an existing fork, or they are creating a new one
         // altogether.
         const isNewOwnedArtifact =
-          !this.state.artifact.id || this.state.artifact.ownership !== 'own';
+            !this.state.artifact.id || this.state.artifact.ownership === "own";
 
         if (isNewOwnedArtifact) {
-          // Update/save the issued ID back to the local artifact DB.
-          const artifact: Artifact = {
-            ...this.state.artifact,
-            id: payload.body.id,
-            ownership: 'own'
-          };
+          const artifact = {...this.state.artifact}
           try {
             await this.props.artifactRegistry.commitArtifact(artifact);
             newState.artifact = artifact;
@@ -247,27 +243,41 @@ export class ArtifactSharingComponent extends React.Component<
     }
   }
 
+  setReproVisibility(event: ChangeEvent<HTMLElement>): void {
+    event.preventDefault();
+    let reproElements = Array.from(document.getElementsByClassName("reproInput") as HTMLCollectionOf<HTMLElement>);
+    reproElements.forEach((element) => {
+      let target = event.target as HTMLInputElement;
+      element.style.display = target.checked ? 'block' : 'none'
+    });
+  }
+
+  async storeArtifact(event: React.FormEvent): Promise<void> {
+    event.preventDefault();
+    alert(event);
+  }
+
   async onSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
-    this.setState({ currentState: WidgetState.WAITING });
+    this.setState({currentState: WidgetState.WAITING});
     try {
       let artifact: Artifact;
       if (this.state.artifact.id) {
         artifact = await this.props.artifactRegistry.newArtifactVersion(
-          this.state.artifact
+            this.state.artifact
         );
       } else {
         artifact = await this.props.artifactRegistry.createArtifact(
-          this.state.artifact.path
+            this.state.artifact.path
         );
       }
 
-      if (!artifact.deposition_id) {
-        throw new Error('Missing artifact ID');
+      if (!artifact.versions) {
+        throw new Error('Missing artifact contents');
       }
 
       this.setState({
-        currentState: WidgetState.EMBED_FORM,
+        currentState: WidgetState.ARTIFACT_FORM,
         artifact
       });
     } catch (e) {
@@ -278,31 +288,6 @@ export class ArtifactSharingComponent extends React.Component<
     }
   }
 
-  embedUrl(): string | null {
-    const artifact = this.state.artifact;
-    if (!artifact) {
-      return;
-    }
-
-    const { id, deposition_id, deposition_repo } = artifact;
-
-    if (id) {
-      if (deposition_id) {
-        return this.props.urlFactory.newVersionUrl(
-          id,
-          deposition_id,
-          deposition_repo
-        );
-      } else {
-        return this.props.urlFactory.updateUrl(id);
-      }
-    } else if (deposition_id) {
-      return this.props.urlFactory.createUrl(deposition_id, deposition_repo);
-    }
-
-    return;
-  }
-
   render(): JSX.Element {
     const hidden = { display: 'none' };
     const block = { display: 'block' };
@@ -310,6 +295,16 @@ export class ArtifactSharingComponent extends React.Component<
       memo[state] = this.state.currentState === state ? block : hidden;
       return memo;
     }, {} as { [key in WidgetState]: { display: string } });
+
+    // const [authors, setAuthors] = useState([]);
+    // const [authorInput, setAuthorInput] = useState({});
+    //
+    // const addItem = (list: Array<Object>, setter: Function, input: Object, inputSetter: Function) => {
+    //   setter([...list, input]);
+    //   inputSetter({});
+    // };
+    //
+    // const remo
 
     let formText: React.ElementRef<any>;
     let successText: React.ElementRef<any>;
@@ -354,19 +349,61 @@ export class ArtifactSharingComponent extends React.Component<
           </form>
         </div>
         <div
-          className="chi-Expand"
-          style={visibilities[WidgetState.EMBED_FORM]}
+            className="chi-Expand"
+            style={visibilities[WidgetState.ARTIFACT_FORM]}
         >
-          {this.state.currentState === WidgetState.EMBED_FORM && (
-            <iframe
-              className="chi-ArtifactSharing-embed"
-              src={this.embedUrl()}
-            />
+          {this.state.currentState === WidgetState.ARTIFACT_FORM && (
+              <form onSubmit={this.storeArtifact} style={visibilities[WidgetState.ARTIFACT_FORM]}>
+                <fieldset id="artifactFormInputs">
+                  <label style={this.state.artifact.id ? block : hidden}>
+                    <p>ID</p>
+                    <input name="id" type="text" value={this.state.artifact.id}
+                           alt="The UUID used to reference this artifact" disabled/>
+                  </label>
+                  <label>
+                    <p>Title</p>
+                    <input name="title" type="text" alt="The title of your experiment"/>
+                  </label>
+                  <label>
+                    <p>Short Description</p>
+                    <input name="short_description" type="text" alt="A short description of your experiment"/>
+                  </label>
+                  <label>
+                    <p>Long Description</p>
+                    <textarea name="long_description">
+                    Long description of your experiment. Supports GitHub-flavored markdown (Optional)
+                  </textarea>
+                  </label>
+                  <label>
+                    <p>Visibility</p>
+                    <select name="visibility" value="private">
+                      <option value="private">private</option>
+                      <option value="public">public</option>
+                    </select>
+                  </label>
+                  <h3>Reproducibility</h3>
+                  <label>
+                    <p>Enable Reproducibility Requests?</p>
+                    <input name="repro_enable_requests" type="checkbox"
+                           checked={this.state.artifact.reproducibility.enable_requests}
+                           onChange={this.setReproVisibility}/>
+                  </label>
+                  <label className="reproInput"
+                         style={this.state.artifact.reproducibility.enable_requests ? block : hidden}>
+                    <p>Access Hours</p>
+                    <input name="repro_access_hours" type="number"
+                           alt="The number of hours for which a user will have to reproduce your experiment"/>
+                  </label>
+                  <label>
+                    <p>Authors</p>
+                  </label>
+                </fieldset>
+              </form>
           )}
         </div>
         <div
-          className="chi-ArtifactSharing-Form"
-          style={visibilities[WidgetState.WAITING]}
+            className="chi-ArtifactSharing-Form"
+            style={visibilities[WidgetState.WAITING]}
         >
           <div className="jp-Spinner">
             <div className="jp-SpinnerContent"></div>
@@ -376,13 +413,13 @@ export class ArtifactSharingComponent extends React.Component<
           </div>
         </div>
         <div
-          className="chi-ArtifactSharing-Form"
-          style={visibilities[WidgetState.SUCCESS]}
+            className="chi-ArtifactSharing-Form"
+            style={visibilities[WidgetState.SUCCESS]}
         >
           {this.state.errorMessage && (
-            <div className="chi-ArtifactSharing-ErrorMessage">
-              {this.state.errorMessage}
-            </div>
+              <div className="chi-ArtifactSharing-ErrorMessage">
+                {this.state.errorMessage}
+              </div>
           )}
           {successText}
         </div>
