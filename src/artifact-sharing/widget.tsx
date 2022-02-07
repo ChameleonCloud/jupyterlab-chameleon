@@ -1,12 +1,7 @@
-import { ReactWidget } from '@jupyterlab/apputils';
+import {ReactWidget} from '@jupyterlab/apputils';
 import * as React from 'react';
-import {
-  IArtifactSharingURL,
-  IArtifactRegistry,
-  Artifact,
-  Workflow
-} from './tokens';
-import {ChangeEvent, useState} from "react";
+import {ChangeEvent, useState} from 'react';
+import {Artifact, ArtifactVisibility, IArtifactRegistry, IArtifactSharingURL, Workflow} from './tokens';
 
 enum WidgetState {
   CONFIRM_FORM = 'confirm-form',
@@ -224,7 +219,7 @@ export class ArtifactSharingComponent extends React.Component<
         // artifact from an existing fork, or they are creating a new one
         // altogether.
         const isNewOwnedArtifact =
-            !this.state.artifact.id || this.state.artifact.ownership === "own";
+            !this.state.artifact.id || this.state.artifact.ownership !== "own";
 
         if (isNewOwnedArtifact) {
           const artifact = {...this.state.artifact}
@@ -289,34 +284,47 @@ export class ArtifactSharingComponent extends React.Component<
   }
 
   render(): JSX.Element {
-    const hidden = { display: 'none' };
-    const block = { display: 'block' };
+    const hidden = {display: 'none'};
+    const block = {display: 'block'};
     const visibilities = this._allStates.reduce((memo, state: WidgetState) => {
       memo[state] = this.state.currentState === state ? block : hidden;
       return memo;
     }, {} as { [key in WidgetState]: { display: string } });
 
-    // const [authors, setAuthors] = useState([]);
-    // const [authorInput, setAuthorInput] = useState({});
-    //
-    // const addItem = (list: Array<Object>, setter: Function, input: Object, inputSetter: Function) => {
-    //   setter([...list, input]);
-    //   inputSetter({});
-    // };
-    //
-    // const remo
+    const [authors, setAuthors] = useState(this.state.artifact.authors);
+    const [authorName, setAuthorName] = useState("");
+    const [authorEmail, setAuthorEmail] = useState("");
+    const [authorAffiliation, setAuthorAffilitation] = useState("");
+
+    const [linkedProjects, setLinkedProjects] = useState(this.state.artifact.linked_projects);
+    const [linkedProjectInput, setLinkedProjectInput] = useState("");
+
+    const [links, setLinks] = useState(this.state.artifact.versions[0].links);
+    const [linkURN, setLinkURN] = useState("");
+    const [linkLabel, setLinkLabel] = useState("");
+
+    function addItem<T>(list: Array<T>, setter: Function, input: T, inputSetter: Function): void {
+      setter([...list, input]);
+      inputSetter({});
+    }
+
+    function removeItem<T>(list: Array<T>, setter: Function, index: number): void {
+      let newList = [...list];
+      newList.splice(index, 1);
+      setter(newList);
+    }
 
     let formText: React.ElementRef<any>;
     let successText: React.ElementRef<any>;
 
     // Check if we started from an already-published artifact.
     if (this.props.initialArtifact.id) {
-      formText = <NewArtifactVersionText urlFactory={this.props.urlFactory} />;
+      formText = <NewArtifactVersionText urlFactory={this.props.urlFactory}/>;
       successText = (
-        <NewArtifactVersionSuccessText
-          urlFactory={this.props.urlFactory}
-          artifact={this.state.artifact}
-        />
+          <NewArtifactVersionSuccessText
+              urlFactory={this.props.urlFactory}
+              artifact={this.state.artifact}
+          />
       );
     } else {
       formText = <NewArtifactText urlFactory={this.props.urlFactory} />;
@@ -362,23 +370,27 @@ export class ArtifactSharingComponent extends React.Component<
                   </label>
                   <label>
                     <p>Title</p>
-                    <input name="title" type="text" alt="The title of your experiment"/>
+                    <input name="title" type="text" alt="The title of your experiment"
+                           onChange={(event) => this.state.artifact.title = event.target.value}/>
                   </label>
                   <label>
                     <p>Short Description</p>
-                    <input name="short_description" type="text" alt="A short description of your experiment"/>
+                    <input name="short_description" type="text" alt="A short description of your experiment"
+                           onChange={(event) => this.state.artifact.short_description = event.target.value}/>
                   </label>
                   <label>
                     <p>Long Description</p>
-                    <textarea name="long_description">
+                    <textarea name="long_description"
+                              onChange={(event) => this.state.artifact.long_description = event.target.value}>
                     Long description of your experiment. Supports GitHub-flavored markdown (Optional)
                   </textarea>
                   </label>
                   <label>
                     <p>Visibility</p>
-                    <select name="visibility" value="private">
-                      <option value="private">private</option>
-                      <option value="public">public</option>
+                    <select name="visibility" value={ArtifactVisibility.PRIVATE}
+                            onChange={(event) => this.state.artifact.visibility = event.target.value as ArtifactVisibility}>
+                      <option value={ArtifactVisibility.PUBLIC}>private</option>
+                      <option value={ArtifactVisibility.PRIVATE}>public</option>
                     </select>
                   </label>
                   <h3>Reproducibility</h3>
@@ -396,10 +408,92 @@ export class ArtifactSharingComponent extends React.Component<
                   </label>
                   <label>
                     <p>Authors</p>
+                    <label>
+                      <p>Full Name</p>
+                      <input name="author_full_name" type="text" alt="The author's full name"
+                             onChange={(event) => setAuthorName(event.target.value)}/>
+                    </label>
+                    <label>
+                      <p>E-Mail Address</p>
+                      <input name="author_email" type="email" alt="The author's e-mail address"
+                             onClick={(event) => setAuthorEmail((event.target as HTMLInputElement).value)}/>
+                    </label>
+                    <label>
+                      <p>Affiliation</p>
+                      <input name="author_affiliation" type="text"
+                             alt="The organization or group with which the author is affiliated"
+                             onClick={(event) => setAuthorAffilitation((event.target as HTMLInputElement).value)}/>
+                    </label>
+                    <button onClick={() =>
+                        addItem(authors, setAuthors, {
+                          full_name: authorName,
+                          email: authorEmail,
+                          affiliation: authorAffiliation
+                        }, (_: any) => {
+                          setAuthorName("");
+                          setAuthorEmail("");
+                          setAuthorAffilitation("");
+                        })
+                    }>+
+                    </button>
+                    <ul>
+                      {authors.map((author, index) => (
+                          <div key={index}>
+                            <li>{author}</li>
+                            <button onClick={() =>
+                                removeItem(authors, setAuthors, index)
+                            }>-
+                            </button>
+                          </div>
+                      ))}
+                    </ul>
+                  </label>
+                  <label>
+                    <p>Linked Projects</p>
+                    <input name="linked_projects" onChange={(event) => setLinkedProjectInput(event.target.value)}
+                           value={linkedProjectInput}/>
+                    <button
+                        onClick={(event) => addItem(linkedProjects, setLinkedProjects, (event.target as HTMLInputElement).value, setLinkedProjectInput)}>+
+                    </button>
+                    <ul>
+                      {linkedProjects.map((project, index) => (
+                          <div key={index}>
+                            <li>{project}</li>
+                            <button onClick={() => removeItem(linkedProjects, setLinkedProjects, index)}>-</button>
+                          </div>
+                      ))}
+                    </ul>
+                  </label>
+                  <label>
+                    <p>Links</p>
+                    <label>
+                      <p>URN</p>
+                      <input name="link_urn" type="text" alt="A URN formatted string describing the link"
+                             onClick={(event) => setLinkURN((event.target as HTMLInputElement).value)}/>
+                    </label>
+                    <label>
+                      <p>Label</p>
+                      <input name="link_label" type="text" alt="A label which describes the link"
+                             onClick={(event) => setLinkLabel((event.target as HTMLInputElement).value)}/>
+                    </label>
+                    <button onClick={() => addItem(links, setLinks, {urn: linkURN, label: linkLabel}, (_: any) => {
+                      setLinkURN("");
+                      setLinkLabel("");
+                    })}>+
+                    </button>
+                    <ul>
+                      {links.map((link, index) => (
+                          <div key={index}>
+                            <li>{link}</li>
+                            <button onClick={() => removeItem(links, setLinks, index)}>-</button>
+                          </div>
+                      ))}
+                    </ul>
                   </label>
                 </fieldset>
               </form>
-          )}
+          )
+          }
         </div>
         <div
             className="chi-ArtifactSharing-Form"
@@ -432,10 +526,10 @@ export class ArtifactSharingComponent extends React.Component<
 
 export class ArtifactSharingWidget extends ReactWidget {
   constructor(
-    artifact: Artifact,
-    workflow: Workflow,
-    urlFactory: IArtifactSharingURL,
-    artifactRegistry: IArtifactRegistry
+      artifact: Artifact,
+      workflow: Workflow,
+      urlFactory: IArtifactSharingURL,
+      artifactRegistry: IArtifactRegistry
   ) {
     super();
     this.id = 'artifact-sharing-Widget';
@@ -447,15 +541,15 @@ export class ArtifactSharingWidget extends ReactWidget {
 
   render(): JSX.Element {
     return (
-      <ArtifactSharingComponent
-        initialArtifact={this._artifact}
-        workflow={this._workflow}
-        urlFactory={this._urlFactory}
-        artifactRegistry={this._artifactRegistry}
-        // Disposing of a widget added to a MainContentArea will cause the
-        // content area to also dispose of itself (close itself.)
-        onCancel={this.dispose.bind(this)}
-      />
+        <ArtifactSharingComponent
+            initialArtifact={this._artifact}
+            workflow={this._workflow}
+            urlFactory={this._urlFactory}
+            artifactRegistry={this._artifactRegistry}
+            // Disposing of a widget added to a MainContentArea will cause the
+            // content area to also dispose of itself (close itself.)
+            onCancel={this.dispose.bind(this)}
+        />
     );
   }
 

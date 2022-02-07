@@ -131,6 +131,8 @@ def default_prepare_upload():
         },
     }
 
+    LOG.info(response)
+
     return json.dumps(response)
 
 

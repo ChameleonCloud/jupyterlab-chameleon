@@ -13,53 +13,58 @@ export interface IArtifactSharingURL {
   isExternalUrl(origin: string): boolean;
 }
 
-class ArtifactAuthor {
-  readonly full_name?: string;
-  readonly affiliation?: string;
-  readonly email?: string;
+export enum ArtifactVisibility {
+  PUBLIC = "public",
+  PRIVATE = "private"
 }
 
-class ArtifactVersionContents {
-  readonly urn?: string
+export class ArtifactAuthor {
+  full_name?: string;
+  affiliation?: string;
+  email?: string;
 }
 
-class ArtifactLink {
-  readonly label: string;
-  readonly urn?: string;
-  readonly verified?: boolean;
+export class ArtifactVersionContents {
+  urn?: string
 }
 
-class ArtifactReproducibility {
-  readonly enable_requests?: boolean;
-  readonly access_hours?: number;
-  readonly requests?: number;
+export class ArtifactLink {
+  label: string;
+  urn?: string;
+  verified?: boolean;
 }
 
-class ArtifactVersion {
-  readonly contents?: ArtifactVersionContents;
-  readonly links: ArtifactLink[];
-  readonly created_at?: Date;
-  readonly slug?: string;
+export class ArtifactReproducibility {
+  enable_requests?: boolean;
+  access_hours?: number;
+  requests?: number;
+}
+
+export class ArtifactVersion {
+  contents?: ArtifactVersionContents;
+  links: ArtifactLink[];
+  created_at?: Date;
+  slug?: string;
 }
 
 // Should match jupyterlab_chameleon/db.py:Artifact
 export class Artifact {
-  readonly id?: string;
-  readonly title?: string;
-  readonly short_description?: string;
-  readonly long_description?: string;
-  readonly tags: string[];
-  readonly authors: ArtifactAuthor[];
-  readonly linked_projects: string[];
-  readonly reproducibility: ArtifactReproducibility;
-  readonly created_at?: Date;
-  readonly updated_at?: Date;
-  readonly owner_urn?: string;
-  readonly visibility?: 'private' | 'public';
-  readonly versions: ArtifactVersion[];
+  id?: string;
+  title?: string;
+  short_description?: string;
+  long_description?: string;
+  tags: string[];
+  authors: ArtifactAuthor[];
+  linked_projects: string[];
+  reproducibility: ArtifactReproducibility;
+  created_at?: Date;
+  updated_at?: Date;
+  owner_urn?: string;
+  visibility?: ArtifactVisibility;
+  versions: ArtifactVersion[];
 
-  readonly currentVersion: number
-  readonly ownership: 'own' | 'fork';
+  currentVersion: number
+  ownership: 'own' | 'fork';
 
   path: string;
 }
