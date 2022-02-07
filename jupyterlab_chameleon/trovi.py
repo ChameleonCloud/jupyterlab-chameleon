@@ -1,5 +1,3 @@
-from datetime import datetime, timedelta
-
 import logging
 import os
 import requests
@@ -11,6 +9,7 @@ from .util import refresh_access_token
 LOG = logging.getLogger(__name__)
 
 TROVI_URL = os.getenv("TROVI_URL")
+
 
 def authenticate_trovi_url(url, trovi_token):
     req = requests.PreparedRequest()
