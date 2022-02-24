@@ -2,12 +2,7 @@
 .chi-Expand {
   width: 100%;
   height: 100%;
-}
-
-.chi-ArtifactSharing-embed {
-  border: 0;
-  width: 100%;
-  height: 100%;
+  overflow-y: auto;
 }
 
 .chi-ArtifactSharing-Form {
@@ -27,6 +22,27 @@
 .chi-ArtifactSharing-Form p,
 .chi-ArtifactSharing-Form li {
   max-width: 40em;
+}
+
+.chi-ArtifactSharing-Form input[type=text] input[type=email] {
+  width: 50em;
+  height: 2em;
+  display: inline-block;
+}
+
+.chi-ArtifactSharing-Form textarea {
+  width: 40%;
+  height: 30em;
+}
+
+.chi-ArtifactSharing-Form-Required:after {
+  content: " *";
+  font-weight: bold;
+  color: var(--jp-error-color0);
+}
+
+.chi-ArtifactSharing-Form label {
+  min-width: 30%;
 }
 
 .chi-ArtifactSharing-FormActions {

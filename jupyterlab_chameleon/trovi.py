@@ -24,6 +24,12 @@ def contents_url(trovi_token, urn=None) -> str:
     )
 
 
+def artifacts_url(trovi_token, uuid=None) -> str:
+    return authenticate_trovi_url(
+        urljoin(TROVI_URL, f"/artifacts/{uuid if uuid else ''}"), trovi_token
+    )
+
+
 def get_trovi_token():
     """
     Exchange the user's auth token for a trovi token.
@@ -33,7 +39,7 @@ def get_trovi_token():
         headers={"Content-Type": "application/json", "Accept": "application/json"},
         json={
             "grant_type": "token_exchange",
-            "subject_token": refresh_access_token(),
+            "subject_token": refresh_access_token()[0],
             "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
             "scope": "artifacts:read artifacts:write",
         },
