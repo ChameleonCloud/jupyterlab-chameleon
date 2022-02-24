@@ -1,26 +1,34 @@
-import { ServerConnection } from '@jupyterlab/services';
+import {ServerConnection} from '@jupyterlab/services';
 
-import { URLExt } from '@jupyterlab/coreutils';
+import {URLExt} from '@jupyterlab/coreutils';
 
-import { Artifact, IArtifactRegistry } from './tokens';
+import {Artifact, ArtifactVersionContents, IArtifactRegistry} from './tokens';
 
 export class ArtifactRegistry implements IArtifactRegistry {
-  async createArtifact(path: string): Promise<Artifact> {
+  async createContents(path: string): Promise<ArtifactVersionContents> {
+    // Upload experiment contents (located at `path`)
     const res = await ServerConnection.makeRequest(
-      Private.getUrl(this._serverSettings),
-      { method: 'POST', body: JSON.stringify({ path }) },
-      this._serverSettings
+        Private.getContentsUrl(this._serverSettings),
+        {method: 'POST', body: JSON.stringify({path})},
+        this._serverSettings
     );
 
-    const artifact = await Private.handleCreateResponse(res);
-    this._updateArtifacts(artifact);
+    return await Private.handleContentsResponse(res);
+  }
 
-    return artifact;
+  async createArtifact(artifact: Artifact): Promise<Artifact> {
+    const res = await ServerConnection.makeRequest(
+        Private.getArtifactsUrl(this._serverSettings),
+        {method: 'POST', body: JSON.stringify(artifact)},
+        this._serverSettings
+    );
+
+    return await Private.handleCreateResponse(res);
   }
 
   async commitArtifact(artifact: Artifact): Promise<void> {
     const res = await ServerConnection.makeRequest(
-      Private.getUrl(this._serverSettings),
+      Private.getArtifactsUrl(this._serverSettings),
       { method: 'PUT', body: JSON.stringify(artifact) },
       this._serverSettings
     );
@@ -37,9 +45,9 @@ export class ArtifactRegistry implements IArtifactRegistry {
 
   async newArtifactVersion(artifact: Artifact): Promise<Artifact> {
     const res = await ServerConnection.makeRequest(
-      Private.getUrl(this._serverSettings),
-      { method: 'POST', body: JSON.stringify(artifact) },
-      this._serverSettings
+        Private.getArtifactsUrl(this._serverSettings),
+        {method: 'POST', body: JSON.stringify(artifact)},
+        this._serverSettings
     );
 
     const updatedArtifact = await Private.handleCreateResponse(res);
@@ -52,9 +60,9 @@ export class ArtifactRegistry implements IArtifactRegistry {
     if (!this._artifactsFetched) {
       if (!this._artifactsFetchPromise) {
         this._artifactsFetchPromise = ServerConnection.makeRequest(
-          Private.getUrl(this._serverSettings),
-          { method: 'GET' },
-          this._serverSettings
+            Private.getArtifactsUrl(this._serverSettings),
+            {method: 'GET'},
+            this._serverSettings
         ).then(Private.handleListResponse);
       }
 
@@ -102,13 +110,20 @@ export class ArtifactRegistry implements IArtifactRegistry {
 
 namespace Private {
   export function normalizeArtifact(artifact: Artifact): Artifact {
-    artifact.path = artifact.path.replace(/^\.\//, '')
-    return artifact
+    return {
+      ...artifact,
+      path: artifact.path.replace(/^\.\//, '')
+    };
   }
 
-  export function getUrl(settings: ServerConnection.ISettings): string {
-    const parts = [settings.baseUrl, 'chameleon', 'artifacts'];
+  export function getContentsUrl(settings: ServerConnection.ISettings): string {
+    const parts = [settings.baseUrl, 'chameleon', 'contents'];
     return URLExt.join.call(URLExt, ...parts);
+  }
+
+  export function getArtifactsUrl(settings: ServerConnection.ISettings): string {
+    const parts = [settings.baseUrl, 'chameleon', 'artifacts'];
+    return URLExt.join.call(URLExt, ...parts)
   }
 
   export async function handleListResponse(res: Response): Promise<Artifact[]> {
@@ -135,5 +150,14 @@ namespace Private {
     const artifact = (await res.json()) as Artifact;
 
     return normalizeArtifact(artifact);
+  }
+
+  export async function handleContentsResponse(res: Response): Promise<ArtifactVersionContents> {
+    if (res.status > 299) {
+      const message = `HTTP error ${res.status} occured uploading content`;
+      throw new ServerConnection.ResponseError(res, message);
+    }
+
+    return res as ArtifactVersionContents;
   }
 }

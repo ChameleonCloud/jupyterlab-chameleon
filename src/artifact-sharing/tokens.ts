@@ -1,4 +1,4 @@
-import { Token } from '@lumino/coreutils';
+import {Token} from '@lumino/coreutils';
 
 export interface IArtifactSharingURL {
   indexUrl(): string;
@@ -19,54 +19,73 @@ export enum ArtifactVisibility {
 }
 
 export class ArtifactAuthor {
-  full_name?: string;
-  affiliation?: string;
-  email?: string;
+  readonly full_name?: string;
+  readonly affiliation?: string;
+  readonly email?: string;
 }
 
 export class ArtifactVersionContents {
-  urn?: string
+  readonly urn?: string
 }
 
 export class ArtifactLink {
-  label: string;
-  urn?: string;
-  verified?: boolean;
+  readonly label: string;
+  readonly urn?: string;
+  readonly verified?: boolean;
+}
+
+export class ArtifactProject {
+  readonly urn: string;
 }
 
 export class ArtifactReproducibility {
-  enable_requests?: boolean;
-  access_hours?: number;
-  requests?: number;
+  readonly enable_requests?: boolean;
+  readonly access_hours?: number;
+  readonly requests?: number;
 }
 
 export class ArtifactVersion {
-  contents?: ArtifactVersionContents;
-  links: ArtifactLink[];
-  created_at?: Date;
-  slug?: string;
+  readonly contents?: ArtifactVersionContents;
+  readonly links: ArtifactLink[];
+  readonly created_at?: Date;
+  readonly slug?: string;
+
+  constructor() {
+    this.contents = new ArtifactVersionContents();
+    this.links = [];
+  }
 }
 
 // Should match jupyterlab_chameleon/db.py:Artifact
 export class Artifact {
-  id?: string;
-  title?: string;
-  short_description?: string;
-  long_description?: string;
-  tags: string[];
-  authors: ArtifactAuthor[];
-  linked_projects: string[];
-  reproducibility: ArtifactReproducibility;
-  created_at?: Date;
-  updated_at?: Date;
-  owner_urn?: string;
-  visibility?: ArtifactVisibility;
-  versions: ArtifactVersion[];
+  readonly id?: string;
+  readonly title?: string;
+  readonly short_description?: string;
+  readonly long_description?: string;
+  readonly tags: string[];
+  readonly authors: ArtifactAuthor[];
+  readonly linked_projects: ArtifactProject[];
+  readonly reproducibility: ArtifactReproducibility;
+  readonly created_at?: Date;
+  readonly updated_at?: Date;
+  readonly owner_urn?: string;
+  readonly visibility?: ArtifactVisibility;
+  readonly versions: ArtifactVersion[];
 
-  currentVersion: number
-  ownership: 'own' | 'fork';
+  readonly currentVersion: ArtifactVersion;
 
-  path: string;
+  readonly ownership: 'own' | 'fork';
+
+  readonly path: string;
+
+  constructor() {
+    this.authors = [];
+    this.tags = [];
+    this.reproducibility = new ArtifactReproducibility();
+    this.linked_projects = [];
+    this.currentVersion = new ArtifactVersion();
+    this.versions = [];
+  }
 }
 
 export type Workflow = 'upload' | 'edit';
@@ -76,7 +95,8 @@ export const IArtifactRegistry = new Token<IArtifactRegistry>(
 );
 
 export interface IArtifactRegistry {
-  createArtifact(path: string): Promise<Artifact>;
+  createContents(path: string): Promise<ArtifactVersionContents>;
+  createArtifact(artifact: Artifact): Promise<Artifact>;
   commitArtifact(artifact: Artifact): Promise<void>;
   newArtifactVersion(artifact: Artifact): Promise<Artifact>;
   getArtifacts(): Promise<Artifact[]>;

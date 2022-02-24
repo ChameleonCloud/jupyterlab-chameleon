@@ -33,7 +33,7 @@ export class DirListingRenderer extends DirListing.Renderer {
       node.setAttribute('data-artifact-id', artifact.id);
       const artifactText = [
         `Artifact ID: ${artifact.id}`,
-        `Artifact contents: ${artifact.versions[artifact.currentVersion].contents.urn}`,
+        `Artifact contents: ${artifact.currentVersion.contents.urn}`,
         `Artifact ownership: ${artifact.ownership}`
       ].join('\n');
       node.title += `\n${artifactText}`;

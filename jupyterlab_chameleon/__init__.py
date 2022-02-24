@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from jupyter_server.utils import url_path_join
 
-from .artifact import ArtifactHandler
+from .artifact import ArtifactContentsHandler, ArtifactMetadataHandler
 from .db import Artifact, DB
 from .heartbeat import HeartbeatHandler
 from ._version import __version__
@@ -44,15 +44,17 @@ def _load_jupyter_server_extension(server_app: "NotebookApp"):
     # Prepend the base_url so that it works in a jupyterhub setting
     base_url = web_app.settings['base_url']
     base_endpoint = url_path_join(base_url, 'chameleon')
+    contents_endpoint = url_path_join(base_endpoint, 'contents')
     artifact_endpoint = url_path_join(base_endpoint, 'artifacts')
     heartbeat_endpoint = url_path_join(base_endpoint, 'heartbeat')
 
     db = DB(database=f'{notebook_dir}/.chameleon/chameleon.db')
 
     handlers = [
-        (artifact_endpoint, ArtifactHandler,
+        (contents_endpoint, ArtifactContentsHandler,
             {'db': db, 'notebook_dir': notebook_dir}),
         (heartbeat_endpoint, HeartbeatHandler),
+        (artifact_endpoint, ArtifactMetadataHandler),
     ]
     web_app.add_handlers('.*$', handlers)
 

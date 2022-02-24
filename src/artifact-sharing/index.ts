@@ -1,32 +1,19 @@
-import {
-  ILayoutRestorer,
-  IRouter,
-  JupyterFrontEnd,
-  JupyterFrontEndPlugin
-} from '@jupyterlab/application';
-import {
-  ICommandPalette,
-  MainAreaWidget,
-  WidgetTracker
-} from '@jupyterlab/apputils';
-import { IDocumentManager } from '@jupyterlab/docmanager';
-import {
-  DirListing,
-  FileBrowser,
-  IFileBrowserFactory
-} from '@jupyterlab/filebrowser';
+import {ILayoutRestorer, IRouter, JupyterFrontEnd, JupyterFrontEndPlugin} from '@jupyterlab/application';
+import {ICommandPalette, MainAreaWidget, WidgetTracker} from '@jupyterlab/apputils';
+import {IDocumentManager} from '@jupyterlab/docmanager';
+import {DirListing, FileBrowser, IFileBrowserFactory} from '@jupyterlab/filebrowser';
 import fileBrowserPlugins from '@jupyterlab/filebrowser-extension';
-import { IMainMenu } from '@jupyterlab/mainmenu';
-import { Contents } from '@jupyterlab/services';
-import { ISettingRegistry } from '@jupyterlab/settingregistry';
-import { IStateDB } from '@jupyterlab/statedb';
-import { ITranslator } from '@jupyterlab/translation';
-import { toArray } from '@lumino/algorithm';
-import { Menu } from '@lumino/widgets';
-import { DirListingRenderer } from './filebrowser';
-import { ArtifactRegistry } from './registry';
-import { IArtifactRegistry, IArtifactSharingURL, Workflow } from './tokens';
-import { ArtifactSharingWidget } from './widget';
+import {IMainMenu} from '@jupyterlab/mainmenu';
+import {Contents} from '@jupyterlab/services';
+import {ISettingRegistry} from '@jupyterlab/settingregistry';
+import {IStateDB} from '@jupyterlab/statedb';
+import {ITranslator} from '@jupyterlab/translation';
+import {toArray} from '@lumino/algorithm';
+import {Menu} from '@lumino/widgets';
+import {DirListingRenderer} from './filebrowser';
+import {ArtifactRegistry} from './registry';
+import {ArtifactReproducibility, ArtifactVersion, IArtifactRegistry, IArtifactSharingURL, Workflow} from './tokens';
+import {ArtifactSharingWidget} from './widget';
 
 const PLUGIN_NAMESPACE = '@chameleoncloud/jupyterlab-chameleon';
 const WIDGET_PLUGIN_ID = `${PLUGIN_NAMESPACE}:artifact-sharing`;
@@ -213,6 +200,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
         });
       })
       .catch((reason: Error) => {
+        console.trace();
         console.error(reason.message);
       });
   },
@@ -284,17 +272,17 @@ class FileBrowserHelper {
     if (!item || item.type !== 'directory') {
       return null;
     }
-    let artifact = await this._artifactRegistry.getArtifact(item.path);
+    let artifact = await this._artifactRegistry.getArtifact(item.path); // TODO fetch via UUID
     if (!artifact) {
       // Generate a new placeholder artifact for the given path.
       artifact = {
         authors: [],
         linked_projects: [],
-        reproducibility: undefined,
+        reproducibility: new ArtifactReproducibility(),
         tags: [],
         versions: [],
         path: item.path,
-        currentVersion: 0,
+        currentVersion: new ArtifactVersion(),
         ownership: 'fork'
       };
     }
