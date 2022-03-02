@@ -2,7 +2,7 @@ import {ServerConnection} from '@jupyterlab/services';
 
 import {URLExt} from '@jupyterlab/coreutils';
 
-import {Artifact, ArtifactVersionContents, IArtifactRegistry} from './tokens';
+import {Artifact, ArtifactVersion, ArtifactVersionContents, IArtifactRegistry} from './tokens';
 
 export class ArtifactRegistry implements IArtifactRegistry {
   async createContents(path: string): Promise<ArtifactVersionContents> {
@@ -23,7 +23,7 @@ export class ArtifactRegistry implements IArtifactRegistry {
         this._serverSettings
     );
 
-    return await Private.handleCreateResponse(res);
+    return await Private.handleCreateResponse(res, artifact);
   }
 
   async commitArtifact(artifact: Artifact): Promise<void> {
@@ -43,17 +43,14 @@ export class ArtifactRegistry implements IArtifactRegistry {
     await Private.handleUpdateResponse(res);
   }
 
-  async newArtifactVersion(artifact: Artifact): Promise<Artifact> {
+  async newArtifactVersion(artifact: Artifact): Promise<ArtifactVersion> {
     const res = await ServerConnection.makeRequest(
         Private.getArtifactsUrl(this._serverSettings),
         {method: 'POST', body: JSON.stringify(artifact)},
         this._serverSettings
     );
 
-    const updatedArtifact = await Private.handleCreateResponse(res);
-    this._updateArtifacts(updatedArtifact);
-
-    return updatedArtifact;
+    return await Private.handleNewVersionResponse(res);
   }
 
   async getArtifacts(): Promise<Artifact[]> {
@@ -77,9 +74,9 @@ export class ArtifactRegistry implements IArtifactRegistry {
     return this._artifacts;
   }
 
-  async getArtifact(path: string): Promise<Artifact> {
+  async getArtifact(uuid: string): Promise<Artifact> {
     const artifacts = await this.getArtifacts();
-    return artifacts.find(a => a.path === path);
+    return artifacts.find(a => a.id === uuid);
   }
 
   getArtifactSync(path: string): Artifact {
@@ -109,13 +106,6 @@ export class ArtifactRegistry implements IArtifactRegistry {
 }
 
 namespace Private {
-  export function normalizeArtifact(artifact: Artifact): Artifact {
-    return {
-      ...artifact,
-      path: artifact.path.replace(/^\.\//, '')
-    };
-  }
-
   export function getContentsUrl(settings: ServerConnection.ISettings): string {
     const parts = [settings.baseUrl, 'chameleon', 'contents'];
     return URLExt.join.call(URLExt, ...parts);
@@ -123,15 +113,15 @@ namespace Private {
 
   export function getArtifactsUrl(settings: ServerConnection.ISettings): string {
     const parts = [settings.baseUrl, 'chameleon', 'artifacts'];
-    return URLExt.join.call(URLExt, ...parts)
+    return URLExt.join.call(URLExt, ...parts) + "?op=list";
   }
 
   export async function handleListResponse(res: Response): Promise<Artifact[]> {
-    const { artifacts } = await res.json();
+    const {artifacts} = await res.json();
     if (!artifacts || !Array.isArray(artifacts)) {
       throw new Error('Malformed response');
     }
-    return artifacts.map(normalizeArtifact) as Artifact[];
+    return artifacts as Artifact[];
   }
 
   export async function handleUpdateResponse(res: Response): Promise<void> {
@@ -141,15 +131,51 @@ namespace Private {
     }
   }
 
-  export async function handleCreateResponse(res: Response): Promise<Artifact> {
-    if (res.status > 299) {
-      const message = 'An error occurred creating the artifact';
+  export async function handleNewVersionResponse(res: Response): Promise<ArtifactVersion> {
+    if (!res.ok) {
+      let error = JSON.stringify((await res.json()).error);
+      if (!error) {
+        error = "Unknown"
+      }
+      const message = `An error occurred creating the artifact version: ${error}`;
       throw new ServerConnection.ResponseError(res, message);
     }
 
-    const artifact = (await res.json()) as Artifact;
+    const resJSON = await res.json();
 
-    return normalizeArtifact(artifact);
+    return resJSON as ArtifactVersion;
+  }
+
+  export async function handleCreateResponse(res: Response, old: Artifact): Promise<Artifact> {
+    if (!res.ok) {
+      let error = JSON.stringify((await res.json()).error);
+      if (!error) {
+        error = "Unknown"
+      }
+
+      const message = `An error occurred creating the artifact: ${error}`;
+      throw new ServerConnection.ResponseError(res, message);
+    }
+
+    const resJSON = await res.json();
+
+    return {
+      id: resJSON.uuid,
+      title: resJSON.title,
+      short_description: resJSON.short_description,
+      long_description: resJSON.long_description,
+      tags: resJSON.tags,
+      authors: resJSON.authors,
+      linked_projects: resJSON.linked_projects.map((urn: string) => ({urn: urn})),
+      reproducibility: resJSON.reproducibility,
+      created_at: resJSON.created_at,
+      updated_at: resJSON.updated_at,
+      owner_urn: resJSON.owner_urn,
+      visibility: resJSON.visibility,
+      versions: resJSON.versions,
+      ownership: old.ownership,
+      path: old.path,
+    };
   }
 
   export async function handleContentsResponse(res: Response): Promise<ArtifactVersionContents> {
@@ -158,6 +184,6 @@ namespace Private {
       throw new ServerConnection.ResponseError(res, message);
     }
 
-    return res as ArtifactVersionContents;
+    return await res.json() as ArtifactVersionContents;
   }
 }

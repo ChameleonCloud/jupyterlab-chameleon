@@ -18,49 +18,44 @@ export enum ArtifactVisibility {
   PRIVATE = "private"
 }
 
-export class ArtifactAuthor {
-  readonly full_name?: string;
+export type ArtifactAuthor = {
+  readonly full_name: string;
+  readonly email: string;
   readonly affiliation?: string;
-  readonly email?: string;
 }
 
-export class ArtifactVersionContents {
-  readonly urn?: string
+export type ArtifactVersionContents = {
+  readonly urn: string
 }
 
-export class ArtifactLink {
+export type ArtifactLink = {
   readonly label: string;
-  readonly urn?: string;
+  readonly urn: string;
   readonly verified?: boolean;
 }
 
-export class ArtifactProject {
+export type ArtifactProject = {
   readonly urn: string;
 }
 
-export class ArtifactReproducibility {
-  readonly enable_requests?: boolean;
+export type ArtifactReproducibility = {
+  readonly enable_requests: boolean;
   readonly access_hours?: number;
   readonly requests?: number;
 }
 
-export class ArtifactVersion {
-  readonly contents?: ArtifactVersionContents;
+export type ArtifactVersion = {
+  readonly contents: ArtifactVersionContents;
   readonly links: ArtifactLink[];
   readonly created_at?: Date;
   readonly slug?: string;
-
-  constructor() {
-    this.contents = new ArtifactVersionContents();
-    this.links = [];
-  }
 }
 
 // Should match jupyterlab_chameleon/db.py:Artifact
-export class Artifact {
+export type Artifact = {
   readonly id?: string;
-  readonly title?: string;
-  readonly short_description?: string;
+  readonly title: string;
+  readonly short_description: string;
   readonly long_description?: string;
   readonly tags: string[];
   readonly authors: ArtifactAuthor[];
@@ -72,20 +67,12 @@ export class Artifact {
   readonly visibility?: ArtifactVisibility;
   readonly versions: ArtifactVersion[];
 
-  readonly currentVersion: ArtifactVersion;
+  readonly newContents?: ArtifactVersionContents;
+  readonly newLinks?: ArtifactLink[];
 
   readonly ownership: 'own' | 'fork';
 
   readonly path: string;
-
-  constructor() {
-    this.authors = [];
-    this.tags = [];
-    this.reproducibility = new ArtifactReproducibility();
-    this.linked_projects = [];
-    this.currentVersion = new ArtifactVersion();
-    this.versions = [];
-  }
 }
 
 export type Workflow = 'upload' | 'edit';
@@ -98,7 +85,7 @@ export interface IArtifactRegistry {
   createContents(path: string): Promise<ArtifactVersionContents>;
   createArtifact(artifact: Artifact): Promise<Artifact>;
   commitArtifact(artifact: Artifact): Promise<void>;
-  newArtifactVersion(artifact: Artifact): Promise<Artifact>;
+  newArtifactVersion(artifact: Artifact): Promise<ArtifactVersion>;
   getArtifacts(): Promise<Artifact[]>;
   getArtifact(path: string): Promise<Artifact>;
   hasArtifactSync(path: string): boolean;

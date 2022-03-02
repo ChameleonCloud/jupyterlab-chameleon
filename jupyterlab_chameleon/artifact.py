@@ -7,13 +7,14 @@ import tempfile
 from dataclasses import asdict
 from jupyter_server.base.handlers import APIHandler
 from keystoneauth1.exceptions.http import Unauthorized
+from requests import HTTPError
 from tornado import web
 from traitlets import Any, CRegExp, Int
 from traitlets.config import LoggingConfigurable
 
 from .db import DB
-from .exception import AuthenticationError, IllegalArchiveError
-from .trovi import contents_url, get_trovi_token, artifacts_url
+from .exception import AuthenticationError, IllegalArchiveError, BadRequestError
+from .trovi import contents_url, get_trovi_token, artifacts_url, artifact_versions_url
 from .util import ErrorResponder
 
 LOG = logging.getLogger(__name__)
@@ -155,12 +156,39 @@ def default_prepare_create():
             "method": "POST",
             "headers": {
                 "content-type": "application/json",
-                "accepts": "application/json"
-            }
+                "accepts": "application/json",
+            },
         }
     }
 
     return response
+
+
+def default_prepare_version(uuid):
+    """Prepare a request for artifact creation
+
+    Returns:
+        dict: a structure with the following keys:
+            :publish_endpoint: the publish endpoint parameters
+                :url: the absolute URL of the Trovi API
+                :method: the request method
+                :headers: any headers to include in the request
+    """
+    trovi_token = get_trovi_token()
+
+    response = {
+        "publish_endpoint": {
+            "url": artifact_versions_url(trovi_token, uuid),
+            "method": "POST",
+            "headers": {
+                "content-type": "application/json",
+                "accepts": "application/json",
+            },
+        }
+    }
+
+    return response
+
 
 def default_prepare_list():
     """Prepare a request to retrieve all visible artifacts
@@ -180,8 +208,8 @@ def default_prepare_list():
             "method": "GET",
             "headers": {
                 "content-type": "application/json",
-                "accepts": "application/json"
-            }
+                "accepts": "application/json",
+            },
         }
     }
 
@@ -325,7 +353,7 @@ class ArtifactArchiver(LoggingConfigurable):
 
         urn = info["contents"]["urn"]
 
-        return urn.split(":")[-1]
+        return urn
 
 
 class ArtifactPublisher(LoggingConfigurable):
@@ -341,16 +369,40 @@ class ArtifactPublisher(LoggingConfigurable):
         ),
     )
 
-    prepare_list = Any(config=True, default_value=default_prepare_list, help=(
-        "A function that prepares a request to download all visible artifact metadata. "
-        "By default this downloads from a trovi api endpoint, but custom "
-        "implementations can do otherwise. the output of this function "
-        "should adhere to the structure documented in "
-        ":fn:`default_prepare_list`"
-    ))
+    prepare_version = Any(
+        config=True,
+        default_value=default_prepare_version,
+        help=(
+            "A function that prepares a request to upload new version metadata."
+            "By default this uploads to a trovi api endpoint, but custom "
+            "implementations can do otherwise. the output of this function "
+            "should adhere to the structure documented in "
+            ":fn:`default_prepare_create`"
+        )
+    )
+
+    prepare_list = Any(
+        config=True,
+        default_value=default_prepare_list,
+        help=(
+            "A function that prepares a request to download all visible "
+            "artifact metadata. "
+            "By default this downloads from a trovi api endpoint, but custom "
+            "implementations can do otherwise. the output of this function "
+            "should adhere to the structure documented in "
+            ":fn:`default_prepare_list`"
+        ),
+    )
 
     def create(self, artifact: dict) -> dict:
-        publish = self.prepare_create()
+        if artifact_id := artifact.get("id"):
+            publish = self.prepare_version(artifact_id)
+            body = self._to_version_request(artifact)
+            log_message = "Created new artifact version"
+        else:
+            publish = self.prepare_create()
+            body = self._to_create_request(artifact)
+            log_message = "Published new artifact"
         publish_endpoint = publish.get("publish_endpoint", {})
         publish_url = publish_endpoint.get("url")
         publish_method = publish_endpoint.get("method", "POST")
@@ -365,12 +417,12 @@ class ArtifactPublisher(LoggingConfigurable):
             url=publish_url,
             method=publish_method,
             headers=publish_headers,
-            json=artifact,
+            json=body,
         )
         res.raise_for_status()
 
         info = res.json()
-        self.log.info(f"Published new artifact: {json.dumps(info, indent=4)}")
+        self.log.info(f"{log_message}: {json.dumps(info, indent=4)}")
 
         return info
 
@@ -391,6 +443,43 @@ class ArtifactPublisher(LoggingConfigurable):
         self.log.info("Fetched artifacts.")
 
         return info
+
+    def _to_version_request(self, artifact: dict):
+        req = {}
+        if contents := artifact.get("newContents"):
+            req["contents"] = contents
+        if links := artifact.get("newLinks"):
+            req["links"] = links
+
+        return req
+
+    def _to_create_request(self, artifact: dict):
+        """Converts the front-end's representation of an artifact to a valid request"""
+        req = {}
+        if title := artifact.get("title"):
+            req["title"] = title
+        if short_desc := artifact.get("short_description"):
+            req["short_description"] = short_desc
+        if long_desc := artifact.get("long_description"):
+            req["long_description"] = long_desc
+        if tags := artifact.get("tags"):
+            req["tags"] = tags
+        if authors := artifact.get("authors"):
+            req["authors"] = authors
+        if projects := artifact.get("linked_projects"):
+            if not all(type(p) is dict and "urn" in p for p in projects):
+                raise BadRequestError("Invalid linked projects")
+            req["linked_projects"] = [p["urn"] for p in projects]
+        if repro := artifact.get("reproducibility"):
+            req["reproducibility"] = repro
+        if owner := artifact.get("owner_urn"):
+            req["owner_urn"] = owner
+        if vis := artifact.get("visibility"):
+            req["visibility"] = vis
+        if "newContents" in artifact or "newLinks" in artifact:
+            req["version"] = self._to_version_request(artifact)
+
+        return req
 
 
 class ArtifactContentsHandler(APIHandler, ErrorResponder):
@@ -445,8 +534,6 @@ class ArtifactContentsHandler(APIHandler, ErrorResponder):
         """Register an uploaded artifact with its external ID, when assigned."""
         self.check_xsrf_cookie()
 
-        self.log.warning("WE GOT A PUT FOLKS!!!!!!")
-
         try:
             self.set_status(204)
             return self.finish()
@@ -493,6 +580,10 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             return self.error_response(400, str(err))
         except (AuthenticationError, Unauthorized) as err:
             return self.error_response(401, str(err))
+        except HTTPError as err:
+            return self.error_response(
+                err.response.status_code, str(err.response.content, "utf-8")
+            )
         except Exception as err:
             self.log.exception("An unknown error occurred")
             return self.error_response(500, str(err))
@@ -513,7 +604,10 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             return self.error_response(400, str(err))
         except (AuthenticationError, Unauthorized) as err:
             return self.error_response(401, str(err))
+        except HTTPError as err:
+            return self.error_response(
+                err.response.status_code, str(err.response.content, "utf-8")
+            )
         except Exception as err:
             self.log.exception("An Unknown error occured")
             return self.error_response(500, str(err))
-

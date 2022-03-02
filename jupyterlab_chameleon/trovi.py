@@ -24,9 +24,19 @@ def contents_url(trovi_token, urn=None) -> str:
     )
 
 
-def artifacts_url(trovi_token, uuid=None) -> str:
+def artifacts_url(trovi_token, uuid=None, version=False) -> str:
     return authenticate_trovi_url(
-        urljoin(TROVI_URL, f"/artifacts/{uuid if uuid else ''}"), trovi_token
+        urljoin(
+            TROVI_URL,
+            f"/artifacts/{uuid if uuid else ''}",
+        ),
+        trovi_token,
+    )
+
+
+def artifact_versions_url(trovi_token, uuid, slug=None) -> str:
+    return authenticate_trovi_url(
+        urljoin(TROVI_URL, f"/artifacts/{uuid}/versions/{slug or ''}"), trovi_token
     )
 
 

@@ -12,7 +12,7 @@ import {toArray} from '@lumino/algorithm';
 import {Menu} from '@lumino/widgets';
 import {DirListingRenderer} from './filebrowser';
 import {ArtifactRegistry} from './registry';
-import {ArtifactReproducibility, ArtifactVersion, IArtifactRegistry, IArtifactSharingURL, Workflow} from './tokens';
+import {IArtifactRegistry, IArtifactSharingURL, Workflow} from './tokens';
 import {ArtifactSharingWidget} from './widget';
 
 const PLUGIN_NAMESPACE = '@chameleoncloud/jupyterlab-chameleon';
@@ -276,14 +276,17 @@ class FileBrowserHelper {
     if (!artifact) {
       // Generate a new placeholder artifact for the given path.
       artifact = {
+        title: "",
+        short_description: "",
         authors: [],
         linked_projects: [],
-        reproducibility: new ArtifactReproducibility(),
+        reproducibility: {enable_requests: false},
         tags: [],
         versions: [],
+        newLinks: [],
+        newContents: {urn: ""},
         path: item.path,
-        currentVersion: new ArtifactVersion(),
-        ownership: 'fork'
+        ownership: "fork"
       };
     }
     return artifact;
