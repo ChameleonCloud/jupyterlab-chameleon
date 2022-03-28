@@ -117,21 +117,18 @@ def default_prepare_upload():
 
     Returns:
         dict: a structure with the following keys:
-            :upload_endpoint: the upload endpoint parameters:
-                :url: the absolute URL to perform the upload
-                :method: the request method
-                :headers: any headers to include in the request
+            :url: the absolute URL to perform the upload
+            :method: the request method
+            :headers: any headers to include in the request
     """
     trovi_token = get_trovi_token()
 
     response = {
-        "upload_endpoint": {
-            "url": contents_url(trovi_token),
-            "method": "POST",
-            "headers": {
-                "content-type": "application/json",
-                "accept": "application/json",
-            },
+        "url": contents_url(trovi_token),
+        "method": "POST",
+        "headers": {
+            "content-type": "application/json",
+            "accept": "application/json",
         },
     }
 
@@ -143,22 +140,19 @@ def default_prepare_create():
 
     Returns:
         dict: a structure with the following keys:
-            :publish_endpoint: the publish endpoint parameters
-                :url: the absolute URL of the Trovi API
-                :method: the request method
-                :headers: any headers to include in the request
+            :url: the absolute URL of the Trovi API
+            :method: the request method
+            :headers: any headers to include in the request
     """
     trovi_token = get_trovi_token()
 
     response = {
-        "publish_endpoint": {
-            "url": artifacts_url(trovi_token),
-            "method": "POST",
-            "headers": {
-                "content-type": "application/json",
-                "accepts": "application/json",
-            },
-        }
+        "url": artifacts_url(trovi_token),
+        "method": "POST",
+        "headers": {
+            "content-type": "application/json",
+            "accepts": "application/json",
+        },
     }
 
     return response
@@ -169,22 +163,19 @@ def default_prepare_version(uuid):
 
     Returns:
         dict: a structure with the following keys:
-            :publish_endpoint: the publish endpoint parameters
-                :url: the absolute URL of the Trovi API
-                :method: the request method
-                :headers: any headers to include in the request
+            :url: the absolute URL of the Trovi API
+            :method: the request method
+            :headers: any headers to include in the request
     """
     trovi_token = get_trovi_token()
 
     response = {
-        "publish_endpoint": {
-            "url": artifact_versions_url(trovi_token, uuid),
-            "method": "POST",
-            "headers": {
-                "content-type": "application/json",
-                "accepts": "application/json",
-            },
-        }
+        "url": artifact_versions_url(trovi_token, uuid),
+        "method": "POST",
+        "headers": {
+            "content-type": "application/json",
+            "accepts": "application/json",
+        },
     }
 
     return response
@@ -195,22 +186,19 @@ def default_prepare_list():
 
     Returns:
         dict: a structure with the following keys
-            :list_endpoint: the list endpoint parameters
-                :url: the absolute URL of the Trovi API
-                :method: the request method
-                :headers: any headers to include in the request
+            :url: the absolute URL of the Trovi API
+            :method: the request method
+            :headers: any headers to include in the request
     """
     trovi_token = get_trovi_token()
 
     response = {
-        "list_endpoint": {
-            "url": artifacts_url(trovi_token),
-            "method": "GET",
-            "headers": {
-                "content-type": "application/json",
-                "accepts": "application/json",
-            },
-        }
+        "url": artifacts_url(trovi_token),
+        "method": "GET",
+        "headers": {
+            "content-type": "application/json",
+            "accepts": "application/json",
+        },
     }
 
     return response
@@ -316,11 +304,10 @@ class ArtifactArchiver(LoggingConfigurable):
             ValueError: if the prepared upload request is malformed.
             requests.exceptions.HTTPError: if the upload fails.
         """
-        upload = self.prepare_upload()
-        upload_endpoint = upload.get("upload_endpoint", {})
-        upload_url = upload_endpoint.get("url")
-        upload_method = upload_endpoint.get("method", "POST")
-        upload_headers = upload_endpoint.get("headers", {})
+        prepared_req = self.prepare_upload()
+        upload_url = prepared_req.get("url")
+        upload_method = prepared_req.get("method", "POST")
+        upload_headers = prepared_req.get("headers", {})
         upload_headers.update(
             {
                 "content-type": self.MIME_TYPE,
@@ -378,7 +365,7 @@ class ArtifactPublisher(LoggingConfigurable):
             "implementations can do otherwise. the output of this function "
             "should adhere to the structure documented in "
             ":fn:`default_prepare_create`"
-        )
+        ),
     )
 
     prepare_list = Any(
@@ -396,17 +383,17 @@ class ArtifactPublisher(LoggingConfigurable):
 
     def create(self, artifact: dict) -> dict:
         if artifact_id := artifact.get("id"):
-            publish = self.prepare_version(artifact_id)
+            prepared_req = self.prepare_version(artifact_id)
             body = self._to_version_request(artifact)
             log_message = "Created new artifact version"
         else:
-            publish = self.prepare_create()
+            prepared_req = self.prepare_create()
             body = self._to_create_request(artifact)
             log_message = "Published new artifact"
-        publish_endpoint = publish.get("publish_endpoint", {})
-        publish_url = publish_endpoint.get("url")
-        publish_method = publish_endpoint.get("method", "POST")
-        publish_headers = publish_endpoint.get("headers", {})
+
+        publish_url = prepared_req.get("url")
+        publish_method = prepared_req.get("method", "POST")
+        publish_headers = prepared_req.get("headers", {})
 
         if not publish_url:
             raise ValueError("Malformed CreateArtifact request")
@@ -427,11 +414,10 @@ class ArtifactPublisher(LoggingConfigurable):
         return info
 
     def list(self) -> dict:
-        prep = self.prepare_list()
-        list_endpoint = prep.get("list_endpoint", {})
-        list_url = list_endpoint.get("url")
-        list_method = list_endpoint.get("method", "GET")
-        list_headers = list_endpoint.get("headers", {})
+        prepared_req = self.prepare_list()
+        list_url = prepared_req.get("url")
+        list_method = prepared_req.get("method", "GET")
+        list_headers = prepared_req.get("headers", {})
 
         if not list_url:
             raise ValueError("Malformed ListArtifact request")
