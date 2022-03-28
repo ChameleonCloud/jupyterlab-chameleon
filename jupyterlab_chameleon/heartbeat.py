@@ -15,7 +15,7 @@ class HeartbeatHandler(APIHandler, ErrorResponder):
             _, expires_at = refresh_access_token(source_ident="heartbeat")
             self.set_status(200)
             self.write({"expires_at": expires_at})
-            self.finish()
+            await self.finish()
         except (AuthenticationError, Unauthorized) as err:
             try:
                 reauthenticate_link = jupyterhub_public_url('auth/refresh')

@@ -19,7 +19,7 @@ def authenticate_trovi_url(url, trovi_token):
 
 def contents_url(trovi_token, urn=None) -> str:
     return authenticate_trovi_url(
-        urljoin(TROVI_URL, f"/contents/{urn if urn else ''}?backend=chameleon"),
+        urljoin(TROVI_URL, f"/contents/?backend=chameleon"),
         trovi_token,
     )
 
@@ -71,7 +71,7 @@ def get_trovi_token():
         LOG.error(f"Authentication to trovi failed: {new_trovi_token}")
         raise AuthenticationError(
             requests.codes.internal_server_error,
-            "Unknown error uploading artifact to Trovi.",
+            "Unknown error authenticating to Trovi.",
         )
 
     return new_trovi_token
