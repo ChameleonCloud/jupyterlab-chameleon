@@ -54,7 +54,8 @@ def _load_jupyter_server_extension(server_app: "NotebookApp"):
         (contents_endpoint, ArtifactContentsHandler,
             {'db': db, 'notebook_dir': notebook_dir}),
         (heartbeat_endpoint, HeartbeatHandler),
-        (artifact_endpoint, ArtifactMetadataHandler),
+        (artifact_endpoint, ArtifactMetadataHandler,
+         {"db": db, "notebook_dir": notebook_dir}),
     ]
     web_app.add_handlers('.*$', handlers)
 
