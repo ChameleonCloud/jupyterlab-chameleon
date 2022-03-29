@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 
 from jupyter_server.utils import url_path_join
 
-from .artifact import ArtifactContentsHandler, ArtifactMetadataHandler
-from .db import Artifact, DB
+from .artifact import ArtifactMetadataHandler
+from .db import LocalArtifact, DB
 from .heartbeat import HeartbeatHandler
 from ._version import __version__
 
@@ -46,13 +46,12 @@ def _load_jupyter_server_extension(server_app: "NotebookApp"):
     db = DB(database=f"{notebook_dir}/.chameleon/chameleon.db")
 
     handlers = [
+        (heartbeat_endpoint, HeartbeatHandler),
         (
-            contents_endpoint,
-            ArtifactContentsHandler,
+            artifact_endpoint,
+            ArtifactMetadataHandler,
             {"db": db, "notebook_dir": notebook_dir},
         ),
-        (heartbeat_endpoint, HeartbeatHandler),
-        (artifact_endpoint, ArtifactMetadataHandler),
     ]
     web_app.add_handlers(".*$", handlers)
 
@@ -76,7 +75,7 @@ def init_db(server_app: "NotebookApp", db: "DB"):
             # artifacts linked to their working directory persisted.
             db.reset()
             db.insert_artifact(
-                Artifact(
+                LocalArtifact(
                     path="",
                     id=artifact_id,
                     deposition_repo=os.getenv("ARTIFACT_DEPOSITION_REPO"),

@@ -4,7 +4,7 @@ import os
 import requests
 import tarfile
 import tempfile
-from dataclasses import asdict
+
 from jupyter_server.base.handlers import APIHandler
 from keystoneauth1.exceptions.http import Unauthorized
 from requests import HTTPError
@@ -12,8 +12,13 @@ from tornado import web
 from traitlets import Any, CRegExp, Int
 from traitlets.config import LoggingConfigurable
 
-from .db import DB
-from .exception import AuthenticationError, IllegalArchiveError, BadRequestError
+from .db import DB, LocalArtifact
+from .exception import (
+    ArtifactNotFoundError,
+    AuthenticationError,
+    IllegalArchiveError,
+    BadRequestError,
+)
 from .trovi import contents_url, get_trovi_token, artifacts_url, artifact_versions_url
 from .util import ErrorResponder
 
@@ -158,6 +163,18 @@ def default_prepare_create():
     return response
 
 
+def default_prepare_patch(uuid):
+    """Prepare a request for artifact metadata update (patch)."""
+    return {
+        "url": artifacts_url(get_trovi_token(), uuid=uuid),
+        "method": "PATCH",
+        "headers": {
+            "content-type": "application/json",
+            "accepts": "application/json",
+        },
+    }
+
+
 def default_prepare_version(uuid):
     """Prepare a request for artifact creation
 
@@ -205,21 +222,6 @@ def default_prepare_list():
 
 
 class ArtifactArchiver(LoggingConfigurable):
-    # TODO(jason): change to Callable when that trait is in some published
-    # trailets release. It is still not being published as part of 4.x[1]
-    # [1]: https://github.com/ipython/traitlets/pull/333#issuecomment-639153911
-    prepare_upload = Any(
-        config=True,
-        default_value=default_prepare_upload,
-        help=(
-            "A function that prepares the archive for upload. By default "
-            "this uploads to a trovi api endpoint, but custom "
-            "implementations can do otherwise. the output of this function "
-            "should adhere to the structure documented in "
-            ":fn:`default_prepare_upload`"
-        ),
-    )
-
     ignored_file_pattern = CRegExp(
         config=True,
         default_value=r"(\.chameleon|\.ipynb_checkpoints|\.git|\.ssh)/.*$",
@@ -238,8 +240,6 @@ class ArtifactArchiver(LoggingConfigurable):
             "number. Defaults to 500MB."
         ),
     )
-
-    MIME_TYPE = "application/tar+gz"
 
     def package(self, path: str) -> str:
         """Create gzipped tar file filename from directory
@@ -289,61 +289,11 @@ class ArtifactArchiver(LoggingConfigurable):
 
         return archive
 
-    def upload(self, path: str) -> str:
-        """Upload an artifact archive to Swift via the Trovi API.
 
-        Args:
-            path (str): the full path to the archive file.
-
-        Returns:
-            str: the URN of the uploaded content, which corresponds to the object
-                name in the Swift container.
-
-        Raises:
-            PermissionError: if the archive cannot be read or accessed.
-            ValueError: if the prepared upload request is malformed.
-            requests.exceptions.HTTPError: if the upload fails.
-        """
-        prepared_req = self.prepare_upload()
-        upload_url = prepared_req.get("url")
-        upload_method = prepared_req.get("method", "POST")
-        upload_headers = prepared_req.get("headers", {})
-        upload_headers.update(
-            {
-                "content-type": self.MIME_TYPE,
-            }
-        )
-
-        if not upload_url:
-            raise ValueError("Malformed upload request")
-
-        stat = os.stat(path)
-        size_mb = stat.st_size / 1024 / 1024
-        self.log.info((f"Uploading {path} ({size_mb:.2f}MB) to {upload_url}"))
-
-        upload_headers.update(
-            {
-                "content-type": self.MIME_TYPE,
-                "content-disposition": f"attachment; filename={os.path.basename(path)}",
-                "content-length": str(stat.st_size),
-            }
-        )
-
-        with open(path, "rb") as f:
-            res = requests.request(
-                url=upload_url, method=upload_method, headers=upload_headers, data=f
-            )
-            res.raise_for_status()
-
-        info = res.json()
-        self.log.info(f"Uploaded content: {info}")
-
-        urn = info["contents"]["urn"]
-
-        return urn
-
-
-class ArtifactPublisher(LoggingConfigurable):
+class ArtifactAPIClient(LoggingConfigurable):
+    # TODO(jason): change prepare_* to Callable when that trait is in some published
+    # trailets release. It is still not being published as part of 4.x[1]
+    # [1]: https://github.com/ipython/traitlets/pull/333#issuecomment-639153911
     prepare_create = Any(
         config=True,
         default_value=default_prepare_create,
@@ -353,6 +303,28 @@ class ArtifactPublisher(LoggingConfigurable):
             "implementations can do otherwise. the output of this function "
             "should adhere to the structure documented in "
             ":fn:`default_prepare_create`"
+        ),
+    )
+
+    prepare_upload = Any(
+        config=True,
+        default_value=default_prepare_upload,
+        help=(
+            "A function that prepares the archive for upload. By default "
+            "this uploads to a trovi api endpoint, but custom "
+            "implementations can do otherwise. the output of this function "
+            "should adhere to the structure documented in "
+            ":fn:`default_prepare_upload`"
+        ),
+    )
+
+    prepare_patch = Any(
+        config=True,
+        default_value=default_prepare_patch,
+        help=(
+            "A function that prepares the artifact for patching (updating metadata.) "
+            "By default this issues a patch request to Trovi's API, but custom "
+            "implementations can do otherwise."
         ),
     )
 
@@ -382,7 +354,7 @@ class ArtifactPublisher(LoggingConfigurable):
     )
 
     def create(self, artifact: dict) -> dict:
-        if artifact_id := artifact.get("id"):
+        if artifact_id := artifact.get("uuid"):
             prepared_req = self.prepare_version(artifact_id)
             body = self._to_version_request(artifact)
             log_message = "Created new artifact version"
@@ -413,6 +385,78 @@ class ArtifactPublisher(LoggingConfigurable):
 
         return info
 
+    def patch(self, uuid: str, patch_list: "list[dict]") -> dict:
+        prepared_req = self.prepare_patch(uuid)
+        patch_url = prepared_req.get("url")
+        patch_method = prepared_req.get("method", "POST")
+        patch_headers = prepared_req.get("headers", {})
+
+        if not patch_url:
+            raise ValueError("Malformed patch request")
+
+        res = requests.request(
+            url=patch_url,
+            method=patch_method,
+            headers=patch_headers,
+            json=patch_list,
+        )
+        res.raise_for_status()
+        return res.json()
+
+    def upload(self, path: str, mime_type: str = "application/tar+gz") -> str:
+        """Upload an artifact archive file to storage.
+
+        Args:
+            path (str): the full path to the archive file.
+            mime_type (str): the MIME type of the archive file. Defaults to gzipped
+                tarball (application/tar+gz).
+
+        Returns:
+            a URN pointing to the uploaded contents.
+
+        Raises:
+            PermissionError: if the archive cannot be read or accessed.
+            ValueError: if the prepared upload request is malformed.
+            requests.exceptions.HTTPError: if the upload fails.
+        """
+        prepared_req = self.prepare_upload()
+        upload_url = prepared_req.get("url")
+        upload_method = prepared_req.get("method", "POST")
+        upload_headers = prepared_req.get("headers", {})
+        upload_headers.update(
+            {
+                "content-type": mime_type,
+            }
+        )
+
+        if not upload_url:
+            raise ValueError("Malformed upload request")
+
+        stat = os.stat(path)
+        size_mb = stat.st_size / 1024 / 1024
+        self.log.info((f"Uploading {path} ({size_mb:.2f}MB) to {upload_url}"))
+
+        upload_headers.update(
+            {
+                "content-type": mime_type,
+                "content-disposition": f"attachment; filename={os.path.basename(path)}",
+                "content-length": str(stat.st_size),
+            }
+        )
+
+        with open(path, "rb") as f:
+            res = requests.request(
+                url=upload_url, method=upload_method, headers=upload_headers, data=f
+            )
+            res.raise_for_status()
+
+        info = res.json()
+        self.log.info(f"Uploaded content: {info}")
+
+        urn = info["contents"]["urn"]
+
+        return urn
+
     def list(self) -> dict:
         prepared_req = self.prepare_list()
         list_url = prepared_req.get("url")
@@ -422,13 +466,13 @@ class ArtifactPublisher(LoggingConfigurable):
         if not list_url:
             raise ValueError("Malformed ListArtifact request")
 
+        # TODO: support pagination / limit here, for users w/ lots of artifacts.
         res = requests.request(url=list_url, method=list_method, headers=list_headers)
         res.raise_for_status()
 
-        info = res.json()
-        self.log.info("Fetched artifacts.")
-
-        return info
+        artifacts = res.json().get("artifacts", [])
+        self.log.info(f"Fetched {len(artifacts)} artifacts.")
+        return artifacts
 
     def _to_version_request(self, artifact: dict):
         req = {}
@@ -462,14 +506,19 @@ class ArtifactPublisher(LoggingConfigurable):
             req["owner_urn"] = owner
         if vis := artifact.get("visibility"):
             req["visibility"] = vis
+
+        # Set the initial version as well
         if "newContents" in artifact or "newLinks" in artifact:
             req["version"] = self._to_version_request(artifact)
 
         return req
 
 
-class ArtifactContentsHandler(APIHandler, ErrorResponder):
+class ArtifactMetadataHandler(APIHandler, ErrorResponder):
+    LEGACY_ID_LINK_PREFIX = "urn:chameleon:legacy:"
+
     def initialize(self, db: DB = None, notebook_dir: str = None):
+        self.api_client = ArtifactAPIClient(config=self.config)
         self.db = db
         self.notebook_dir = notebook_dir or "."
 
@@ -479,29 +528,42 @@ class ArtifactContentsHandler(APIHandler, ErrorResponder):
         return os.path.normpath(path)
 
     @web.authenticated
-    async def post(self):
-        """Create a new artifact by triggering an upload of a target directory.
+    def post(self):
+        """Create a new artifact, or a new version of an existing artifact."""
 
-        This method only uploads the content to the storage backend. Creation of
-        artifact metadata is handled in a subsequent step.
-        """
         self.check_xsrf_cookie()
 
         try:
             body = json.loads(self.request.body.decode("utf-8"))
 
-            path = self._normalize_path(body.get("path", "."))
-
+            # 'path' is not part of the artifact metadata, but we will use it to
+            # package and upload the artifact contents.
+            path = body.pop("path", ".")
+            path = self._normalize_path(path)
             if not path.startswith(self.notebook_dir):
                 raise IllegalArchiveError(
                     "Archive source must be in notebook directory"
                 )
 
-            archiver = ArtifactArchiver(config=self.config)
-            contents_urn = archiver.upload(archiver.package(path))
+            archive = ArtifactArchiver(config=self.config).package(path)
+            contents_urn = self.api_client.upload(archive)
+            body["newContents"] = {"urn": contents_urn}
+            artifact = self.api_client.create(body)
 
-            self.set_status(200)
-            self.write({"urn": contents_urn})
+            # Set local properties
+            artifact["path"] = path
+            artifact["ownership"] = "own"
+
+            local_artifact = LocalArtifact(
+                contents_urn, artifact["path"], None, artifact["ownership"]
+            )
+            try:
+                self.db.update_artifact(local_artifact)
+            except ArtifactNotFoundError:
+                self.db.insert_artifact(local_artifact)
+
+            self.set_status(201)
+            self.write(artifact)
             return self.finish()
         except (IllegalArchiveError, json.JSONDecodeError) as err:
             return self.error_response(400, str(err))
@@ -511,57 +573,30 @@ class ArtifactContentsHandler(APIHandler, ErrorResponder):
             return self.error_response(403, str(err))
         except (AuthenticationError, Unauthorized) as err:
             return self.error_response(401, str(err))
+        except HTTPError as err:
+            return self.error_response(
+                err.response.status_code, str(err.response.content, "utf-8")
+            )
         except Exception as err:
             self.log.exception("An unknown error occurred")
             return self.error_response(500, str(err))
 
     @web.authenticated
     def put(self):
-        """Register an uploaded artifact with its external ID, when assigned."""
-        self.check_xsrf_cookie()
-
-        try:
-            self.set_status(204)
-            return self.finish()
-        except json.JSONDecodeError as err:
-            return self.error_response(400, str(err))
-        except Exception as err:
-            self.log.exception("An unknown error occurred")
-            return self.error_response(500, str(err))
-
-    @web.authenticated
-    def get(self):
-        """List all known uploaded artifacts on this server."""
-        self.check_xsrf_cookie()
-
-        try:
-            artifacts = [asdict(a) for a in self.db.list_artifacts()]
-            self.set_status(200)
-            self.write(dict(artifacts=artifacts))
-            return self.finish()
-        except:
-            self.log.exception("An unknown error occurred")
-            return self.error_response(status=500, message="Failed to list artifacts")
-
-
-class ArtifactMetadataHandler(APIHandler, ErrorResponder):
-    def data_received(self, chunk):
-        pass
-
-    @web.authenticated
-    def post(self):
-        # Create new artifact
+        """Edit metadata for an existing artifact."""
         self.check_xsrf_cookie()
 
         try:
             body = json.loads(self.request.body.decode("utf-8"))
+            uuid = body.pop("uuid")
+            if not uuid:
+                return self.error_response(400, "Missing UUID for artifact")
 
-            publisher = ArtifactPublisher(config=self.config)
-            artifact = publisher.create(body)
+            patches = body.pop("patches")
+            if not patches:
+                return self.error_response(400, "Missing patches for artifact")
 
-            self.set_status(201)
-            self.write(artifact)
-            return self.finish()
+            return self.api_client.patch(uuid, patches)
         except json.JSONDecodeError as err:
             return self.error_response(400, str(err))
         except (AuthenticationError, Unauthorized) as err:
@@ -580,11 +615,37 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
         self.check_xsrf_cookie()
 
         try:
-            publisher = ArtifactPublisher(config=self.config)
-            artifacts = publisher.list()
+            artifacts = self.api_client.list()
+
+            # The 'id' of local artifacts == a version UUID (or ID, for legacy versions.)
+            local_contents = {la.id: la.path for la in self.db.list_artifacts()}
+
+            # Find artifacts that map to local workspace
+            local_artifacts = []
+            for artifact in artifacts:
+                for version in artifact["versions"]:
+                    search_keys = [version["contents"]["urn"]]
+                    # Handle legacy-linked artifacts
+                    search_keys.extend(
+                        [
+                            link["urn"].replace(self.LEGACY_ID_LINK_PREFIX, "")
+                            for link in version["links"]
+                            if link["urn"].startswith(self.LEGACY_ID_LINK_PREFIX)
+                        ]
+                    )
+
+                    for key in search_keys:
+                        local_path = local_contents.get(key)
+                        if local_path:
+                            artifact["path"] = os.path.relpath(
+                                local_path, self.notebook_dir
+                            ).replace("./", "")
+                            artifact["ownership"] = "own"
+                            local_artifacts.append(artifact)
+                            break
 
             self.set_status(200)
-            self.write(artifacts)
+            self.write({"artifacts": local_artifacts})
             return self.finish()
         except json.JSONDecodeError as err:
             return self.error_response(400, str(err))

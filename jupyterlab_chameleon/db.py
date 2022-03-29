@@ -11,14 +11,17 @@ LOG = logging.getLogger(__name__)
 
 DATABASE_NAME = "chameleon"
 
+
 @dataclass
-class Artifact:
+class LocalArtifact:
     id: str
     path: str
     deposition_repo: str
     ownership: str
 
-ARTIFACT_COLUMNS = [f.name for f in fields(Artifact)]
+
+ARTIFACT_COLUMNS = [f.name for f in fields(LocalArtifact)]
+
 
 class DB:
     IN_MEMORY = ":memory:"
@@ -46,13 +49,13 @@ class DB:
             cur = conn.cursor()
             cur.execute("delete from artifacts")
 
-    def list_artifacts(self):
+    def list_artifacts(self) -> "list[LocalArtifact]":
         with self.connect() as conn:
             cur = conn.cursor()
             cur.execute(f'select {",".join(ARTIFACT_COLUMNS)} from artifacts')
-            return [Artifact(*row) for row in cur.fetchall()]
+            return [LocalArtifact(*row) for row in cur.fetchall()]
 
-    def insert_artifact(self, artifact: Artifact):
+    def insert_artifact(self, artifact: LocalArtifact):
         with self.connect() as conn:
             cur = conn.cursor()
             cur.execute(
@@ -60,10 +63,10 @@ class DB:
                     f'insert into artifacts ({",".join(ARTIFACT_COLUMNS)}) '
                     "values (?, ?, ?, ?)"
                 ),
-                artifact.as_tuple(),
+                astuple(artifact),
             )
 
-    def update_artifact(self, artifact: Artifact):
+    def update_artifact(self, artifact: LocalArtifact):
         path = artifact.path
         with self.connect() as conn:
             cur = conn.cursor()
@@ -82,7 +85,7 @@ class DB:
             updates = ",".join([f"{col}=?" for col in ARTIFACT_COLUMNS])
             cur.execute(
                 f"update artifacts set {updates} where path=?",
-                artifact.as_tuple() + (path,),
+                astuple(artifact) + (path,),
             )
 
     def connect(self) -> sqlite3.Connection:
