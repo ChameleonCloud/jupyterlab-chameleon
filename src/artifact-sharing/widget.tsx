@@ -1,6 +1,6 @@
-import {ReactWidget} from '@jupyterlab/apputils';
+import { ReactWidget } from '@jupyterlab/apputils';
 import * as React from 'react';
-import {ChangeEvent} from 'react';
+import { ChangeEvent } from 'react';
 import {
   Artifact,
   ArtifactAuthor,
@@ -31,6 +31,7 @@ namespace ArtifactSharingComponent {
   export interface IState {
     currentState: WidgetState;
     errorMessage?: string;
+    waitMessage?: string;
     artifact?: Artifact;
   }
 
@@ -54,7 +55,9 @@ namespace ArtifactForm {
 
   export interface IProps {
     artifact: Artifact;
+    workflow: Workflow;
     formVisibility: object;
+    formText: React.ElementRef<any>;
     onChange: (fieldName: string) => (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
     onListChange: <T>(fieldName: string) => (list: Array<T>) => void
     onSubmit: (event: React.FormEvent) => Promise<void>;
@@ -91,43 +94,43 @@ namespace ArtifactForm {
 class NewArtifactText extends React.Component<ArtifactText.IProps> {
   render() {
     return (
-        <div>
-          <h2>Package new artifact</h2>
-          <p>
-            Packaging your work as an <i>artifact</i> makes it easier to share
-            your Notebook(s) and related files with others. A packaged experiment:
-          </p>
-          <ul>
-            <li>can by &ldquo;replayed&rdquo; by any Chameleon user</li>
-            <li>
-              is displayed in{' '}
-              <a
-                  href={this.props.urlFactory.indexUrl()}
-                  rel="noreferrer"
-                  target="_blank"
-              >
-                Chameleon Trovi
-              </a>{' '}
-              (artifact sharing system)
-            </li>
-            <li>
-              is initially private to you, but can be shared, either with specific
-              projects, or all users
-            </li>
-            <li>supports versioning, if you ever want to make changes</li>
-          </ul>
-          <p>
-            To learn more about Trovi, and artifact packaging, please refer to the{' '}
+      <div>
+        <h2>Package new artifact</h2>
+        <p>
+          Packaging your work as an <i>artifact</i> makes it easier to share
+          your Notebook(s) and related files with others. A packaged experiment:
+        </p>
+        <ul>
+          <li>can by &ldquo;replayed&rdquo; by any Chameleon user</li>
+          <li>
+            is displayed in{' '}
             <a
-                href="https://chameleoncloud.readthedocs.io"
-                rel="noreferrer"
-                target="_blank"
+              href={this.props.urlFactory.indexUrl()}
+              rel="noreferrer"
+              target="_blank"
             >
-              Chameleon documentation
-            </a>
-            .
-          </p>
-        </div>
+              Chameleon Trovi
+            </a>{' '}
+            (artifact sharing system)
+          </li>
+          <li>
+            is initially private to you, but can be shared, either with specific
+            projects, or all users
+          </li>
+          <li>supports versioning, if you ever want to make changes</li>
+        </ul>
+        <p>
+          To learn more about Trovi, and artifact packaging, please refer to the{' '}
+          <a
+            href="https://chameleoncloud.readthedocs.io"
+            rel="noreferrer"
+            target="_blank"
+          >
+            Chameleon documentation
+          </a>
+          .
+        </p>
+      </div>
     );
   }
 }
@@ -141,7 +144,7 @@ class NewArtifactSuccessText extends React.Component<ArtifactText.IProps> {
           <p>
             You can view your artifact at any time on{' '}
             <a
-              href={this.props.urlFactory.detailUrl(this.props.artifact.id)}
+              href={this.props.urlFactory.detailUrl(this.props.artifact.uuid)}
               target="_blank"
               rel="noreferrer"
             >
@@ -183,6 +186,22 @@ class NewArtifactVersionText extends React.Component<ArtifactText.IProps> {
   }
 }
 
+class EditArtifactText extends React.Component<ArtifactText.IProps> {
+  render() {
+    return (
+      <div>
+        <h2>Edit artifact</h2>
+      </div>
+    )
+  }
+}
+
+class EditArtifactSuccessText extends React.Component<ArtifactText.IProps> {
+  render() {
+    return <div></div>;
+  }
+}
+
 class NewArtifactVersionSuccessText extends React.Component<ArtifactText.IProps> {
   render() {
     return (
@@ -192,7 +211,7 @@ class NewArtifactVersionSuccessText extends React.Component<ArtifactText.IProps>
           <p>
             You can view your artifact at any time on{' '}
             <a
-              href={this.props.urlFactory.detailUrl(this.props.artifact.id)}
+              href={this.props.urlFactory.detailUrl(this.props.artifact.uuid)}
               target="_blank"
               rel="noreferrer"
             >
@@ -212,9 +231,8 @@ class ArtifactDynamicLengthList<E extends JSX.Element, T> extends React.Componen
 
   constructor(props: ArtifactForm.ListProps<E, T>) {
     super(props);
-
     const initialList = this.props.list;
-    this.state = {list: initialList.length > 0 ? initialList : [this.props.newObjectGenerator()]};
+    this.state = { list: initialList.length > 0 ? initialList : [this.props.newObjectGenerator()] };
   }
 
   addItem(index: number) {
@@ -238,7 +256,7 @@ class ArtifactDynamicLengthList<E extends JSX.Element, T> extends React.Componen
       return (event: ChangeEvent<HTMLInputElement>) => {
         const value = event.target.value;
         let newList = [...this.props.list]
-        newList[index] = {...newList[index], [field]: value}
+        newList[index] = { ...newList[index], [field]: value }
         return this.props.artifactUpdater(newList);
       };
     };
@@ -254,16 +272,16 @@ class ArtifactDynamicLengthList<E extends JSX.Element, T> extends React.Componen
 
   render() {
     return (
-        <ul>
-          {this.getListForComponents().map((item, index) => (
-                  <div key={index}>
-                    <li>{this.props.newComponentGenerator(item, this.updateItem(index), this.props.disabled)}</li>
-                    <button type="button" onClick={this.addItem(index)} disabled={this.props.disabled}>+</button>
-                    <button type="button" onClick={this.removeItem(index)} disabled={this.props.disabled}>-</button>
-                  </div>
-              )
-          )}
-        </ul>
+      <ul>
+        {this.getListForComponents().map((item, index) => (
+          <div key={index}>
+            <li>{this.props.newComponentGenerator(item, this.updateItem(index), this.props.disabled)}</li>
+            <button type="button" onClick={this.addItem(index)} disabled={this.props.disabled}>+</button>
+            <button type="button" onClick={this.removeItem(index)} disabled={this.props.disabled}>-</button>
+          </div>
+        )
+        )}
+      </ul>
     )
   }
 }
@@ -281,252 +299,272 @@ class ArtifactAuthorComponent extends React.Component<ArtifactForm.AuthorProps> 
   render(): JSX.Element {
     const author = this.props.author;
     return (
-        <div className="authorInput">
-          <label>
-            <p>Full Name</p>
-            <input
-                name="author_full_name"
-                type="text"
-                placeholder="The author's full name"
-                required={this.hasAnyInput()}
-                value={author.full_name}
-                onChange={this.props.onFieldChange("full_name")}
-                disabled={this.props.disabled}
-            />
-          </label>
-          <label>
-            <p>E-Mail Address</p>
-            <input
-                name="author_email"
-                type="email"
-                placeholder="The author's e-mail address"
-                required={this.hasAnyInput()}
-                value={author.email}
-                onChange={this.props.onFieldChange("email")}
-                disabled={this.props.disabled}
-            />
-          </label>
-          <label>
-            <p>Affiliation</p>
-            <input
-                name="author_affiliation"
-                type="text"
-                placeholder="The organization or group with which the author is affiliated"
-                value={author.affiliation}
-                onChange={this.props.onFieldChange("affiliation")}
-                disabled={this.props.disabled}
-            />
-          </label>
-        </div>
+      <div className="authorInput">
+        <label>
+          <p>Full Name</p>
+          <input
+            name="author_full_name"
+            type="text"
+            placeholder="The author's full name"
+            required={this.hasAnyInput()}
+            value={author.full_name}
+            onChange={this.props.onFieldChange("full_name")}
+            disabled={this.props.disabled}
+          />
+        </label>
+        <label>
+          <p>E-Mail Address</p>
+          <input
+            name="author_email"
+            type="email"
+            placeholder="The author's e-mail address"
+            required={this.hasAnyInput()}
+            value={author.email}
+            onChange={this.props.onFieldChange("email")}
+            disabled={this.props.disabled}
+          />
+        </label>
+        <label>
+          <p>Affiliation</p>
+          <input
+            name="author_affiliation"
+            type="text"
+            placeholder="The organization or group with which the author is affiliated"
+            value={author.affiliation}
+            onChange={this.props.onFieldChange("affiliation")}
+            disabled={this.props.disabled}
+          />
+        </label>
+      </div>
     )
   }
 }
 
-class ArtifactLinkedProjectComponent extends React.Component<ArtifactForm.ProjectProps> {
-  constructor(props: ArtifactForm.ProjectProps) {
-    super(props);
-  }
+// class ArtifactLinkedProjectComponent extends React.Component<ArtifactForm.ProjectProps> {
+//   constructor(props: ArtifactForm.ProjectProps) {
+//     super(props);
+//   }
 
-  render() {
-    const project = this.props.project;
-    return (
-        <div className="linkedProjectInput">
-          <label>
-            <p>URN</p>
-            {/* We just let users input a raw URN. We should probably have a dropdown of their projects... */}
-            <input
-                name="linked-Project-Urn-Input"
-                type="text"
-                placeholder="A URN describing a project"
-                onChange={this.props.onFieldChange("urn")}
-                value={project.urn}
-                disabled={this.props.disabled}
-            />
-          </label>
-        </div>
-    )
-  }
-}
+//   render() {
+//     const project = this.props.project;
+//     return (
+//       <div className="linkedProjectInput">
+//         <label>
+//           <p>URN</p>
+//           {/* We just let users input a raw URN. We should probably have a dropdown of their projects... */}
+//           <input
+//             name="linked-Project-Urn-Input"
+//             type="text"
+//             placeholder="A URN describing a project"
+//             onChange={this.props.onFieldChange("urn")}
+//             value={project.urn}
+//             disabled={this.props.disabled}
+//           />
+//         </label>
+//       </div>
+//     )
+//   }
+// }
 
-class ArtifactLinkComponent extends React.Component<ArtifactForm.LinkProps> {
-  constructor(props: ArtifactForm.LinkProps) {
-    super(props);
-  }
+// class ArtifactLinkComponent extends React.Component<ArtifactForm.LinkProps> {
+//   constructor(props: ArtifactForm.LinkProps) {
+//     super(props);
+//   }
 
-  isAnythingSet(): boolean {
-    const link = this.props.link;
-    return (link.urn !== null &&
-            link.urn !== undefined &&
-            link.urn !== "") ||
-        (link.label !== null &&
-            link.label !== undefined &&
-            link.label !== "");
-  }
+//   isAnythingSet(): boolean {
+//     const link = this.props.link;
+//     return (link.urn !== null &&
+//       link.urn !== undefined &&
+//       link.urn !== "") ||
+//       (link.label !== null &&
+//         link.label !== undefined &&
+//         link.label !== "");
+//   }
 
-  render() {
-    const link = this.props.link;
-    return (
-        <div className="linkInput">
-          <label>
-            <p>URN</p>
-            {/* This should be reworked, rather than just allowing the user to set arbitrary URNs */}
-            <input name="link_urn" type="text" placeholder="A URN string describing the link"
-                   required={this.isAnythingSet()}
-                   value={link.urn}
-                   onChange={this.props.onFieldChange("urn")}/>
-          </label>
-          <label>
-            <p>Label</p>
-            <input name="link_label" type="text" placeholder="A label which describes the link's content"
-                   required={this.isAnythingSet()}
-                   value={link.label}
-                   onChange={this.props.onFieldChange("label")}/>
-          </label>
-        </div>
-    )
-  }
-}
+//   render() {
+//     const link = this.props.link;
+//     return (
+//       <div className="linkInput">
+//         <label>
+//           <p>URN</p>
+//           {/* This should be reworked, rather than just allowing the user to set arbitrary URNs */}
+//           <input name="link_urn" type="text" placeholder="A URN string describing the link"
+//             required={this.isAnythingSet()}
+//             value={link.urn}
+//             onChange={this.props.onFieldChange("urn")} />
+//         </label>
+//         <label>
+//           <p>Label</p>
+//           <input name="link_label" type="text" placeholder="A label which describes the link's content"
+//             required={this.isAnythingSet()}
+//             value={link.label}
+//             onChange={this.props.onFieldChange("label")} />
+//         </label>
+//       </div>
+//     )
+//   }
+// }
 
 class ArtifactEditForm extends React.Component<ArtifactForm.IProps> {
-  static readonly hidden = {display: 'none'};
-  static readonly block = {display: 'block'};
+  static readonly hidden = { display: 'none' };
+  static readonly block = { display: 'block' };
 
-  isCreateForm(): boolean {
-    return this.props.artifact.id === null || this.props.artifact.id === undefined;
+  isUploadForm(): boolean {
+    return this.props.workflow === 'upload';
   }
 
-  visibleOnlyOnNewVersion(): object {
-    return this.props.artifact.id ? ArtifactEditForm.block : ArtifactEditForm.hidden
+  isNewVersionForm(): boolean {
+    return !!this.props.artifact.uuid && this.isUploadForm();
   }
 
   render(): JSX.Element {
+    // Construct a list of form fields to add to the form.
+    // NOTE: whenever this is updated, ensure the list of allowed update keys is
+    // also updated if you want to allow editing the field later via this interface.
+    // (See ArtifactRegistry.updateArtifact).
+    const fields: JSX.Element[] = [];
+    let submitText: JSX.Element;
+
+    if (this.isUploadForm()) {
+      submitText = <span>Upload: <code>{this.props.artifact.path}/</code></span>
+    } else {
+      submitText = <span>Save</span>
+    }
+
+    if (!this.isNewVersionForm()) {
+      fields.push(
+        <label>
+          <p className="chi-ArtifactSharing-Form-Required">Title</p>
+          <input
+            name="title"
+            type="text"
+            placeholder="The title of your experiment"
+            required={true}
+            value={this.props.artifact.title}
+            onChange={this.props.onChange("title")}
+          />
+        </label>
+      );
+      fields.push(
+        <label>
+          <p className="chi-ArtifactSharing-Form-Required">Short Description</p>
+          <input
+            name="short_description"
+            type="text"
+            placeholder="A short description of your experiment"
+            required={true}
+            value={this.props.artifact.short_description}
+            onChange={this.props.onChange("short_description")}
+          />
+        </label>
+      );
+      fields.push(
+        <label>
+          <p>Long Description</p>
+          <textarea
+            name="long_description"
+            placeholder="Long description of your experiment. Supports GitHub-flavored markdown (Optional)"
+            value={this.props.artifact.long_description}
+            onChange={this.props.onChange("long_description")}
+          />
+        </label>
+      );
+      fields.push(
+        <label>
+          <p>Visibility</p>
+          <select
+            name="visibility"
+            title="Allow other users to view your artifact"
+            defaultValue={this.props.artifact.visibility}
+            onChange={this.props.onChange("visibility")}
+          >
+            <option value={ArtifactVisibility.PRIVATE}>private</option>
+            <option value={ArtifactVisibility.PUBLIC}>public</option>
+          </select>
+        </label>
+      );
+      fields.push(
+        <label>
+          <h3>Authors</h3>
+          <ArtifactDynamicLengthList
+            artifactUpdater={this.props.onListChange("authors")}
+            newComponentGenerator={(item, updater, disabled) =>
+              <ArtifactAuthorComponent author={item} onFieldChange={updater} disabled={disabled} />
+            }
+            newObjectGenerator={() => ({ full_name: "", email: "", affiliation: "" })}
+            list={[...this.props.artifact.authors]}
+          />
+        </label>
+      )
+      /**
+       *  Disabled for now, can re-enable when we have better UX for this.
+       *
+       *  <h3>Reproducibility</h3>
+          <label title="Allow other users to request time to reproduce your experiment">
+            <p>Enable reproducibility requests?</p>
+            <input
+              name="repro-Enable-Requests"
+              type="checkbox"
+              checked={this.props.artifact.reproducibility.enable_requests}
+              onChange={this.props.onChange("enable_requests")}
+            />
+          </label>
+          <label
+            className="repro-Input"
+            title="The number of hours a user will have to reproduce your experiment"
+            style={this.props.artifact.reproducibility.enable_requests ? ArtifactEditForm.block : ArtifactEditForm.hidden}
+          >
+            <p>Access Hours</p>
+            <input
+              name="repro_access_hours"
+              type="number"
+              defaultValue={3}
+              onChange={this.props.onChange("access_hours")}
+            />
+          </label>
+          <label>
+            <h3>Linked Projects</h3>
+            <ArtifactDynamicLengthList
+              artifactUpdater={this.props.onListChange("linked_projects")}
+              newComponentGenerator={(item, updater, disabled) =>
+                <ArtifactLinkedProjectComponent
+                  project={item} onFieldChange={updater} disabled={disabled}
+                />
+              }
+              newObjectGenerator={() => ({ urn: "" })}
+              list={[...this.props.artifact.linked_projects]}
+            />
+          </label>
+          <label>
+            <h3>Links</h3>
+            <ArtifactDynamicLengthList
+              artifactUpdater={this.props.onListChange("newLinks")}
+              newComponentGenerator={(item, updater) =>
+                <ArtifactLinkComponent link={item} onFieldChange={updater} />
+              }
+              newObjectGenerator={() => ({ urn: "", label: "" })}
+              list={[...this.props.artifact.newLinks]} />
+          </label>
+       */
+    }
+
     return (
-        <form onSubmit={this.props.onSubmit} style={this.props.formVisibility}>
-          {this.props.error && (
-              <div className="chi-ArtifactSharing-ErrorMessage">
-                {this.props.error}
-              </div>
-          )}
-          <fieldset id="artifactFormInputs">
-            <label style={this.visibleOnlyOnNewVersion()}>
-              <p>ID</p>
-              <input
-                  name="id"
-                  type="text"
-                  value={this.props.artifact.id}
-                  alt="The UUID used to reference this artifact"
-                  disabled
-              />
-            </label>
-            <label>
-              <p className="chi-ArtifactSharing-Form-Required">Title</p>
-              <input
-                  name="title"
-                  type="text"
-                  placeholder="The title of your experiment"
-                  required={true}
-                  onChange={this.props.onChange("title")}
-                  disabled={!this.isCreateForm()}
-              />
-            </label>
-            <label>
-              <p className="chi-ArtifactSharing-Form-Required">Short Description</p>
-              <input
-                  name="short_description"
-                  type="text"
-                  placeholder="A short description of your experiment"
-                  required={true}
-                  onChange={this.props.onChange("short_description")}
-                  disabled={!this.isCreateForm()}
-              />
-            </label>
-            <label>
-              <p>Long Description</p>
-              <textarea
-                  name="long_description"
-                  placeholder="Long description of your experiment. Supports GitHub-flavored markdown (Optional)"
-                  onChange={this.props.onChange("long_description")}
-                  disabled={!this.isCreateForm()}
-              />
-            </label>
-            <label>
-              <p>Visibility</p>
-              <select
-                  name="visibility"
-                  title="Allow other users to view your artifact"
-                  defaultValue={ArtifactVisibility.PRIVATE}
-                  onChange={this.props.onChange("visibility")}
-                  disabled={!this.isCreateForm()}
-              >
-                <option value={ArtifactVisibility.PRIVATE}>private</option>
-                <option value={ArtifactVisibility.PUBLIC}>public</option>
-              </select>
-            </label>
-            <h3>Reproducibility</h3>
-            <label title="Allow other users to request time to reproduce your experiment">
-              <p>Enable reproducibility requests?</p>
-              <input
-                  name="repro-Enable-Requests"
-                  type="checkbox"
-                  checked={this.props.artifact.reproducibility.enable_requests}
-                  onChange={this.props.onChange("enable_requests")}
-                  disabled={!this.isCreateForm()}
-              />
-            </label>
-            <label
-                className="repro-Input"
-                title="The number of hours a user will have to reproduce your experiment"
-                style={this.props.artifact.reproducibility.enable_requests ? ArtifactEditForm.block : ArtifactEditForm.hidden}
-            >
-              <p>Access Hours</p>
-              <input
-                  name="repro_access_hours"
-                  type="number"
-                  defaultValue={3}
-                  onChange={this.props.onChange("access_hours")}
-                  disabled={!this.isCreateForm()}
-              />
-            </label>
-            <label>
-              <h3>Authors</h3>
-              <ArtifactDynamicLengthList
-                  artifactUpdater={this.props.onListChange("authors")}
-                  newComponentGenerator={(item, updater, disabled) =>
-                      <ArtifactAuthorComponent author={item} onFieldChange={updater} disabled={disabled}/>
-                  }
-                  newObjectGenerator={() => ({full_name: "", email: "", affiliation: ""})}
-                  list={[...this.props.artifact.authors]}
-                  disabled={!this.isCreateForm()}
-              />
-            </label>
-            <label>
-              <h3>Linked Projects</h3>
-              <ArtifactDynamicLengthList
-                  artifactUpdater={this.props.onListChange("linked_projects")}
-                  newComponentGenerator={(item, updater, disabled) =>
-                      <ArtifactLinkedProjectComponent
-                          project={item} onFieldChange={updater} disabled={disabled}
-                      />
-                  }
-                  newObjectGenerator={() => ({urn: ""})}
-                  list={[...this.props.artifact.linked_projects]}
-              />
-            </label>
-            <label>
-              <h3>Links</h3>
-              <ArtifactDynamicLengthList
-                  artifactUpdater={this.props.onListChange("newLinks")}
-                  newComponentGenerator={(item, updater) =>
-                      <ArtifactLinkComponent link={item} onFieldChange={updater}/>
-                  }
-                  newObjectGenerator={() => ({urn: "", label: ""})}
-                  list={[...this.props.artifact.newLinks]}/>
-            </label>
-          </fieldset>
-          <button name="artifact-Form-Submit" type="submit">
-            {this.props.artifact.id ? "Save Changes" : "Create Artifact"}
+      <form onSubmit={this.props.onSubmit} style={this.props.formVisibility}>
+        {this.props.error && (
+          <div className="chi-ArtifactSharing-ErrorMessage">
+            {this.props.error}
+          </div>
+        )}
+        {this.props.formText}
+        <fieldset id="artifactFormInputs">
+          {fields}
+        </fieldset>
+        <div className="chi-ArtifactSharing-FormActions">
+          <button className="jp-mod-styled jp-mod-accept" type="submit">
+            {submitText}
           </button>
-        </form>
+        </div>
+      </form>
     )
   }
 }
@@ -535,26 +573,14 @@ export class ArtifactSharingComponent extends React.Component<ArtifactSharingCom
   constructor(props: ArtifactSharingComponent.IProps) {
     super(props);
 
-    let startState: WidgetState;
-    switch (this.props.workflow) {
-      case 'upload':
-        startState = WidgetState.CONFIRM_FORM;
-        break;
-      case 'edit':
-        startState = WidgetState.ARTIFACT_FORM;
-        break;
-      default:
-        break;
-    }
-
     this.state = {
       artifact: this.props.initialArtifact,
-      currentState: startState,
-      errorMessage: null
+      currentState: WidgetState.ARTIFACT_FORM,
+      errorMessage: null,
+      waitMessage: null
     };
 
     this.onSubmit = this.onSubmit.bind(this);
-    this.onMessage = this.onMessage.bind(this);
     this.handleChange = this.handleChange.bind(this);
     this.handleListChange = this.handleListChange.bind(this);
   }
@@ -593,7 +619,7 @@ export class ArtifactSharingComponent extends React.Component<ArtifactSharingCom
           });
           return;
         default:
-          this.setState({artifact: {...this.state.artifact, [fieldName]: event.target.value}});
+          this.setState({ artifact: { ...this.state.artifact, [fieldName]: event.target.value } });
           return;
       }
     };
@@ -601,105 +627,58 @@ export class ArtifactSharingComponent extends React.Component<ArtifactSharingCom
 
   handleListChange<T>(fieldName: string) {
     return (list: Array<T>) => {
-      this.setState({artifact: {...this.state.artifact, [fieldName]: list}});
-    }
-  }
-
-  componentDidMount(): void {
-    window.addEventListener('message', this.onMessage);
-  }
-
-  async onMessage(event: MessageEvent): Promise<void> {
-    if (!this.props.urlFactory.isExternalUrl(event.origin)) {
-      return;
-    }
-
-    event.preventDefault();
-    const payload = event.data as ArtifactSharingComponent.IFormResultPayload;
-    if (payload.message !== 'save_result') {
-      console.log(`Ignoring postMessage type "${payload.message}"`);
-      return;
-    }
-
-    if (!payload.body) {
-      throw new Error('Invalid post message payload');
-    }
-
-    if (payload.body.status === 'success') {
-      const newState: ArtifactSharingComponent.IState = {
-        currentState: WidgetState.SUCCESS
-      };
-
-      if (this.props.workflow === 'upload') {
-        // There are two cases we care about: a user is creating their own
-        // artifact from an existing fork, or they are creating a new one
-        // altogether.
-        const isNewOwnedArtifact =
-            !this.state.artifact.id || this.state.artifact.ownership !== "own";
-
-        if (isNewOwnedArtifact) {
-          const artifact = {...this.state.artifact}
-          try {
-            await this.props.artifactRegistry.commitArtifact(artifact);
-            newState.artifact = artifact;
-          } catch (err) {
-            newState.errorMessage = `Failed to sync state of artifact: ${err.message}`;
-          }
-        }
-      }
-
-      this.setState(newState);
-    } else {
-      this.props.onCancel();
+      this.setState({ artifact: { ...this.state.artifact, [fieldName]: list } });
     }
   }
 
   async onSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
-    const previousState = this.state.currentState;
-    this.setState({currentState: WidgetState.WAITING});
-    if (previousState === WidgetState.CONFIRM_FORM) {
-      // After the confirm form, we upload the state of the experiment
+
+    const successState: ArtifactSharingComponent.IState = {
+      currentState: WidgetState.SUCCESS,
+      errorMessage: null,
+    }
+
+    if (this.props.workflow === 'upload') {
+      this.setState({
+        currentState: WidgetState.WAITING,
+        waitMessage: 'Please wait while your artifact files are uploaded'
+      });
+
       try {
-        const contents = await this.props.artifactRegistry.createContents(
-            this.state.artifact.path
-        );
-        this.setState({
-          currentState: WidgetState.ARTIFACT_FORM,
-          artifact: {
-            ...this.state.artifact,
-            newContents: contents
-          }
-        });
+        if (this.state.artifact.uuid) {
+          await this.props.artifactRegistry.newArtifactVersion(this.state.artifact);
+        } else {
+          successState.artifact = await this.props.artifactRegistry.createArtifact(this.state.artifact);
+        }
+        this.setState(successState);
       } catch (e) {
         this.setState({
-          currentState: WidgetState.CONFIRM_FORM,
+          currentState: WidgetState.ARTIFACT_FORM,
           errorMessage: `Failed to package artifact: ${e.message}`
         });
       }
-    } else if (previousState === WidgetState.ARTIFACT_FORM) {
-      // After the artifact form is submitted, we upload the metadata
-      let artifact: Artifact;
+    } else if (this.props.workflow === 'edit') {
+      this.setState({
+        currentState: WidgetState.WAITING,
+        waitMessage: 'Saving artifact'
+      });
+
       try {
-        if (this.state.artifact.id) {
-          const version = await this.props.artifactRegistry.newArtifactVersion(this.state.artifact);
-          artifact = {...this.state.artifact, versions: [...this.state.artifact.versions, version]}
-        } else {
-          artifact = await this.props.artifactRegistry.createArtifact(this.state.artifact);
-        }
-        this.setState({currentState: WidgetState.SUCCESS, artifact: artifact, errorMessage: null})
+        await this.props.artifactRegistry.updateArtifact(this.state.artifact);
+        this.setState(successState);
       } catch (e) {
         this.setState({
           currentState: WidgetState.ARTIFACT_FORM,
-          errorMessage: `Failed to package artifact: ${e.message}`
+          errorMessage: `Failed to save artifact: ${e.message}`
         });
       }
     }
   }
 
   render(): JSX.Element {
-    const hidden = {display: 'none'};
-    const block = {display: 'block'};
+    const hidden = { display: 'none' };
+    const block = { display: 'block' };
     const visibilities = this._allStates.reduce((memo, state: WidgetState) => {
       memo[state] = this.state.currentState === state ? block : hidden;
       return memo;
@@ -709,83 +688,74 @@ export class ArtifactSharingComponent extends React.Component<ArtifactSharingCom
     let successText: React.ElementRef<any>;
 
     // Check if we started from an already-published artifact.
-    if (this.props.initialArtifact.id) {
-      formText = <NewArtifactVersionText urlFactory={this.props.urlFactory}/>;
-      successText = (
+    if (this.props.workflow === 'upload') {
+      if (this.props.initialArtifact.uuid) {
+        formText = <NewArtifactVersionText urlFactory={this.props.urlFactory} />;
+        successText = (
           <NewArtifactVersionSuccessText
-              urlFactory={this.props.urlFactory}
-              artifact={this.state.artifact}
+            urlFactory={this.props.urlFactory}
+            artifact={this.state.artifact}
           />
-      );
-    } else {
-      formText = <NewArtifactText urlFactory={this.props.urlFactory}/>;
-      successText = (
+        );
+      } else {
+        formText = <NewArtifactText urlFactory={this.props.urlFactory} />;
+        successText = (
           <NewArtifactSuccessText
-              urlFactory={this.props.urlFactory}
-              artifact={this.state.artifact}
+            urlFactory={this.props.urlFactory}
+            artifact={this.state.artifact}
           />
+        );
+      }
+    } else {
+      formText = <EditArtifactText urlFactory={this.props.urlFactory} />;
+      successText = (
+        <EditArtifactSuccessText urlFactory={this.props.urlFactory} artifact={this.state.artifact} />
       );
     }
 
     return (
-        <div className="chi-Expand">
-          <div
-              className="chi-ArtifactSharing-Form"
-              style={visibilities[WidgetState.CONFIRM_FORM]}
-          >
-            <form onSubmit={this.onSubmit}>
-              {this.state.errorMessage && (
-                  <div className="chi-ArtifactSharing-ErrorMessage">
-                    {this.state.errorMessage}
-                  </div>
-              )}
-              {formText}
-              <div className="chi-ArtifactSharing-FormActions">
-                <button className="jp-mod-styled jp-mod-accept" type="submit">
-                  Upload: <code>{this.state.artifact.path}/</code>
-                </button>
-              </div>
-            </form>
-          </div>
-          <div
-              className="chi-ArtifactSharing-Form"
-              style={visibilities[WidgetState.ARTIFACT_FORM]}
-          >
-            {this.state.currentState === WidgetState.ARTIFACT_FORM && (
-                <ArtifactEditForm
-                    artifact={this.state.artifact}
-                    formVisibility={visibilities[WidgetState.ARTIFACT_FORM]}
-                    onChange={this.handleChange}
-                    onListChange={this.handleListChange}
-                    onSubmit={this.onSubmit}
-                    error={this.state.errorMessage}
-                />
-            )
-            }
-          </div>
-          <div
-              className="chi-ArtifactSharing-Form"
-              style={visibilities[WidgetState.WAITING]}
-          >
-            <div className="jp-Spinner">
-              <div className="jp-SpinnerContent"></div>
-              <div className="chi-ArtifactSharing-LoadingMessage">
-                Please wait while your files are uploaded&hellip;
-              </div>
+      <div className="chi-Expand">
+        <div
+          className="chi-ArtifactSharing-Form"
+          style={visibilities[WidgetState.ARTIFACT_FORM]}
+        >
+          {this.state.currentState === WidgetState.ARTIFACT_FORM && (
+            <ArtifactEditForm
+              artifact={this.state.artifact}
+              workflow={this.props.workflow}
+              formVisibility={visibilities[WidgetState.ARTIFACT_FORM]}
+              formText={formText}
+              onChange={this.handleChange}
+              onListChange={this.handleListChange}
+              onSubmit={this.onSubmit}
+              error={this.state.errorMessage}
+            />
+          )
+          }
+        </div>
+        <div
+          className="chi-ArtifactSharing-Form"
+          style={visibilities[WidgetState.WAITING]}
+        >
+          <div className="jp-Spinner">
+            <div className="jp-SpinnerContent"></div>
+            <div className="chi-ArtifactSharing-LoadingMessage">
+              {this.state.waitMessage}
             </div>
           </div>
-          <div
-              className="chi-ArtifactSharing-Form"
-              style={visibilities[WidgetState.SUCCESS]}
-          >
-            {this.state.errorMessage && (
-                <div className="chi-ArtifactSharing-ErrorMessage">
-                  {this.state.errorMessage}
-                </div>
-            )}
-            {successText}
-          </div>
         </div>
+        <div
+          className="chi-ArtifactSharing-Form"
+          style={visibilities[WidgetState.SUCCESS]}
+        >
+          {this.state.errorMessage && (
+            <div className="chi-ArtifactSharing-ErrorMessage">
+              {this.state.errorMessage}
+            </div>
+          )}
+          {successText}
+        </div>
+      </div>
     );
   }
 
@@ -794,10 +764,10 @@ export class ArtifactSharingComponent extends React.Component<ArtifactSharingCom
 
 export class ArtifactSharingWidget extends ReactWidget {
   constructor(
-      artifact: Artifact,
-      workflow: Workflow,
-      urlFactory: IArtifactSharingURL,
-      artifactRegistry: IArtifactRegistry
+    artifact: Artifact,
+    workflow: Workflow,
+    urlFactory: IArtifactSharingURL,
+    artifactRegistry: IArtifactRegistry
   ) {
     super();
     this.id = 'artifact-sharing-Widget';
@@ -809,15 +779,15 @@ export class ArtifactSharingWidget extends ReactWidget {
 
   render(): JSX.Element {
     return (
-        <ArtifactSharingComponent
-            initialArtifact={this._artifact}
-            workflow={this._workflow}
-            urlFactory={this._urlFactory}
-            artifactRegistry={this._artifactRegistry}
-            // Disposing of a widget added to a MainContentArea will cause the
-            // content area to also dispose of itself (close itself.)
-            onCancel={this.dispose.bind(this)}
-        />
+      <ArtifactSharingComponent
+        initialArtifact={this._artifact}
+        workflow={this._workflow}
+        urlFactory={this._urlFactory}
+        artifactRegistry={this._artifactRegistry}
+        // Disposing of a widget added to a MainContentArea will cause the
+        // content area to also dispose of itself (close itself.)
+        onCancel={this.dispose.bind(this)}
+      />
     );
   }
 

@@ -1,4 +1,4 @@
-import {Token} from '@lumino/coreutils';
+import { Token } from '@lumino/coreutils';
 
 export interface IArtifactSharingURL {
   indexUrl(): string;
@@ -51,9 +51,15 @@ export type ArtifactVersion = {
   readonly slug?: string;
 }
 
+export type ArtifactEditableFields = 'title' | 'short_description' | 'long_description' | 'tags' | 'authors' | 'reproducibility' | 'visibility';
+export type EditableArtifact = {
+  [key in ArtifactEditableFields]: any;
+}
+
 // Should match jupyterlab_chameleon/db.py:Artifact
 export type Artifact = {
-  readonly id?: string;
+  // Artifact standard metadata
+  readonly uuid?: string;
   readonly title: string;
   readonly short_description: string;
   readonly long_description?: string;
@@ -67,11 +73,9 @@ export type Artifact = {
   readonly visibility?: ArtifactVisibility;
   readonly versions: ArtifactVersion[];
 
-  readonly newContents?: ArtifactVersionContents;
   readonly newLinks?: ArtifactLink[];
 
   readonly ownership: 'own' | 'fork';
-
   readonly path: string;
 }
 
@@ -82,10 +86,9 @@ export const IArtifactRegistry = new Token<IArtifactRegistry>(
 );
 
 export interface IArtifactRegistry {
-  createContents(path: string): Promise<ArtifactVersionContents>;
   createArtifact(artifact: Artifact): Promise<Artifact>;
-  commitArtifact(artifact: Artifact): Promise<void>;
   newArtifactVersion(artifact: Artifact): Promise<ArtifactVersion>;
+  updateArtifact(artifact: Artifact): Promise<Artifact>;
   getArtifacts(): Promise<Artifact[]>;
   getArtifact(path: string): Promise<Artifact>;
   hasArtifactSync(path: string): boolean;

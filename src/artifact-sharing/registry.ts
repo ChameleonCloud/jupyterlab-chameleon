@@ -1,65 +1,59 @@
-import {ServerConnection} from '@jupyterlab/services';
+import { ServerConnection } from '@jupyterlab/services';
 
-import {URLExt} from '@jupyterlab/coreutils';
+import { URLExt } from '@jupyterlab/coreutils';
 
-import {Artifact, ArtifactVersion, ArtifactVersionContents, IArtifactRegistry} from './tokens';
+import { Artifact, ArtifactEditableFields, ArtifactVersion, ArtifactVersionContents, EditableArtifact, IArtifactRegistry } from './tokens';
+
+const ALLOWED_UPDATE_KEYS: ArtifactEditableFields[] = [
+  'title', 'short_description', 'long_description', 'authors', 'visibility',
+]
 
 export class ArtifactRegistry implements IArtifactRegistry {
-  async createContents(path: string): Promise<ArtifactVersionContents> {
-    // Upload experiment contents (located at `path`)
-    const res = await ServerConnection.makeRequest(
-        Private.getContentsUrl(this._serverSettings),
-        {method: 'POST', body: JSON.stringify({path})},
-        this._serverSettings
-    );
-
-    return await Private.handleContentsResponse(res);
-  }
-
   async createArtifact(artifact: Artifact): Promise<Artifact> {
     const res = await ServerConnection.makeRequest(
-        Private.getArtifactsUrl(this._serverSettings),
-        {method: 'POST', body: JSON.stringify(artifact)},
-        this._serverSettings
-    );
-
-    return await Private.handleCreateResponse(res, artifact);
-  }
-
-  async commitArtifact(artifact: Artifact): Promise<void> {
-    const res = await ServerConnection.makeRequest(
       Private.getArtifactsUrl(this._serverSettings),
-      { method: 'PUT', body: JSON.stringify(artifact) },
+      { method: 'POST', body: JSON.stringify(artifact) },
       this._serverSettings
     );
 
-    // Remove deposition_id from artifact, as the presence of this
-    // property is used to determine whether to show the "add new version"
-    // UI, or the "edit" UI. We have now finished with the "add new version"
-    // flow, potentially, so ensure we clean up this property.
-    // TODO this no longer applies
-    this._updateArtifacts(artifact);
-
-    await Private.handleUpdateResponse(res);
+    const updated = await Private.handleCreateResponse(res, artifact);
+    this._updateArtifacts(updated);
+    return updated;
   }
 
   async newArtifactVersion(artifact: Artifact): Promise<ArtifactVersion> {
     const res = await ServerConnection.makeRequest(
-        Private.getArtifactsUrl(this._serverSettings),
-        {method: 'POST', body: JSON.stringify(artifact)},
-        this._serverSettings
+      Private.getArtifactsUrl(this._serverSettings),
+      { method: 'POST', body: JSON.stringify(artifact) },
+      this._serverSettings
     );
 
-    return await Private.handleNewVersionResponse(res);
+    const version = await Private.handleNewVersionResponse(res);
+    artifact.versions.push(version)
+    this._updateArtifacts(artifact);
+
+    return version;
+  }
+
+  async updateArtifact(artifact: Artifact): Promise<Artifact> {
+    const editableArtifact = (artifact as EditableArtifact);
+    const patchList = ALLOWED_UPDATE_KEYS.map((key) => this._patchFor(key, editableArtifact[key]));
+    const body = { uuid: artifact.uuid, patches: patchList };
+    const res = await ServerConnection.makeRequest(
+      Private.getArtifactsUrl(this._serverSettings),
+      { method: 'PUT', body: JSON.stringify(body) },
+      this._serverSettings
+    );
+    return await Private.handleCreateResponse(res, artifact);
   }
 
   async getArtifacts(): Promise<Artifact[]> {
     if (!this._artifactsFetched) {
       if (!this._artifactsFetchPromise) {
         this._artifactsFetchPromise = ServerConnection.makeRequest(
-            Private.getArtifactsUrl(this._serverSettings),
-            {method: 'GET'},
-            this._serverSettings
+          Private.getArtifactsUrl(this._serverSettings),
+          { method: 'GET' },
+          this._serverSettings
         ).then(Private.handleListResponse);
       }
 
@@ -74,9 +68,9 @@ export class ArtifactRegistry implements IArtifactRegistry {
     return this._artifacts;
   }
 
-  async getArtifact(uuid: string): Promise<Artifact> {
+  async getArtifact(path: string): Promise<Artifact> {
     const artifacts = await this.getArtifacts();
-    return artifacts.find(a => a.id === uuid);
+    return artifacts.find(a => a.path === path);
   }
 
   getArtifactSync(path: string): Artifact {
@@ -103,6 +97,9 @@ export class ArtifactRegistry implements IArtifactRegistry {
       this._artifacts = this._artifacts.concat([artifact]);
     }
   }
+  private _patchFor(key: string, value: any): any {
+    return { op: 'replace', key: `/${key}`, value };
+  }
 }
 
 namespace Private {
@@ -113,13 +110,13 @@ namespace Private {
 
   export function getArtifactsUrl(settings: ServerConnection.ISettings): string {
     const parts = [settings.baseUrl, 'chameleon', 'artifacts'];
-    return URLExt.join.call(URLExt, ...parts) + "?op=list";
+    return URLExt.join.call(URLExt, ...parts);
   }
 
   export async function handleListResponse(res: Response): Promise<Artifact[]> {
-    const {artifacts} = await res.json();
+    const { artifacts } = await res.json();
     if (!artifacts || !Array.isArray(artifacts)) {
-      throw new Error('Malformed response');
+      throw new ServerConnection.ResponseError(res, 'Malformed response');
     }
     return artifacts as Artifact[];
   }
@@ -160,13 +157,13 @@ namespace Private {
     const resJSON = await res.json();
 
     return {
-      id: resJSON.uuid,
+      uuid: resJSON.uuid,
       title: resJSON.title,
       short_description: resJSON.short_description,
       long_description: resJSON.long_description,
       tags: resJSON.tags,
       authors: resJSON.authors,
-      linked_projects: resJSON.linked_projects.map((urn: string) => ({urn: urn})),
+      linked_projects: resJSON.linked_projects.map((urn: string) => ({ urn: urn })),
       reproducibility: resJSON.reproducibility,
       created_at: resJSON.created_at,
       updated_at: resJSON.updated_at,

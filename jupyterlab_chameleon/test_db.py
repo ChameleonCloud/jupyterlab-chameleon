@@ -3,17 +3,20 @@ import os
 
 import pytest
 
-from .db import Artifact, DB
+from .db import LocalArtifact, DB
 from .exception import ArtifactNotFoundError, DuplicateArtifactError
 
 
 class TestDB:
-    no_id = Artifact(
-        id=None, path='./foo', deposition_repo='repo', ownership='ownership')
-    with_id = Artifact(
-        id='1', path='./foo', deposition_repo='repo', ownership='ownership')
-    duplicate = Artifact(
-        id='2', path='./foo', deposition_repo='repo', ownership='ownership')
+    no_id = LocalArtifact(
+        id=None, path="./foo", deposition_repo="repo", ownership="ownership"
+    )
+    with_id = LocalArtifact(
+        id="1", path="./foo", deposition_repo="repo", ownership="ownership"
+    )
+    duplicate = LocalArtifact(
+        id="2", path="./foo", deposition_repo="repo", ownership="ownership"
+    )
 
     def init_db(self, database=DB.IN_MEMORY):
         db = DB(database)
@@ -21,8 +24,8 @@ class TestDB:
         return db
 
     def test_lazy_create_path(self, tmpdir):
-        self.init_db(f'{tmpdir}/subfolder/mydb')
-        assert os.path.exists(f'{tmpdir}/subfolder')
+        self.init_db(f"{tmpdir}/subfolder/mydb")
+        assert os.path.exists(f"{tmpdir}/subfolder")
 
     def test_insert(self):
         db = self.init_db()
