@@ -12,9 +12,8 @@ from tornado import web
 from traitlets import Any, CRegExp, Int
 from traitlets.config import LoggingConfigurable
 
-from .db import DB, LocalArtifact
+from .db import DB, LocalArtifact, DuplicateArtifactError
 from .exception import (
-    ArtifactNotFoundError,
     AuthenticationError,
     IllegalArchiveError,
     BadRequestError,
@@ -398,7 +397,7 @@ class ArtifactAPIClient(LoggingConfigurable):
             url=patch_url,
             method=patch_method,
             headers=patch_headers,
-            json=patch_list,
+            json={"patch": patch_list},
         )
         res.raise_for_status()
         return res.json()
@@ -515,7 +514,7 @@ class ArtifactAPIClient(LoggingConfigurable):
 
 
 class ArtifactMetadataHandler(APIHandler, ErrorResponder):
-    LEGACY_ID_LINK_PREFIX = "urn:chameleon:legacy:"
+    LEGACY_ID_LINK_PREFIX = "urn:trovi:artifact:chameleon:legacy:"
 
     def initialize(self, db: DB = None, notebook_dir: str = None):
         self.api_client = ArtifactAPIClient(config=self.config)
@@ -559,7 +558,7 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             )
             try:
                 self.db.update_artifact(local_artifact)
-            except ArtifactNotFoundError:
+            except DuplicateArtifactError:
                 self.db.insert_artifact(local_artifact)
 
             self.set_status(201)
@@ -596,7 +595,10 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             if not patches:
                 return self.error_response(400, "Missing patches for artifact")
 
-            return self.api_client.patch(uuid, patches)
+            artifact = self.api_client.patch(uuid, patches)
+            self.set_status(200)
+            self.write(artifact)
+            self.finish()
         except json.JSONDecodeError as err:
             return self.error_response(400, str(err))
         except (AuthenticationError, Unauthorized) as err:
