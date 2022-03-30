@@ -25,19 +25,20 @@ def contents_url(trovi_token, urn=None) -> str:
 
 
 def artifacts_url(trovi_token, uuid=None, version=False) -> str:
+    path = "/artifacts/"
+    if uuid:
+        path += f"{uuid}/"
     return authenticate_trovi_url(
-        urljoin(
-            TROVI_URL,
-            f"/artifacts/{uuid if uuid else ''}",
-        ),
+        urljoin(TROVI_URL, path),
         trovi_token,
     )
 
 
 def artifact_versions_url(trovi_token, uuid, slug=None) -> str:
-    return authenticate_trovi_url(
-        urljoin(TROVI_URL, f"/artifacts/{uuid}/versions/{slug or ''}"), trovi_token
-    )
+    path = f"/artifacts/{uuid}/versions/"
+    if slug:
+        path += f"{slug}/"
+    return authenticate_trovi_url(urljoin(TROVI_URL, path), trovi_token)
 
 
 def get_trovi_token():

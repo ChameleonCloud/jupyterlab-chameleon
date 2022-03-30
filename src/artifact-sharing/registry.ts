@@ -44,7 +44,10 @@ export class ArtifactRegistry implements IArtifactRegistry {
       { method: 'PUT', body: JSON.stringify(body) },
       this._serverSettings
     );
-    return await Private.handleCreateResponse(res, artifact);
+
+    const updated = await Private.handleCreateResponse(res, artifact);
+    this._updateArtifacts(updated);
+    return updated;
   }
 
   async getArtifacts(): Promise<Artifact[]> {
@@ -98,7 +101,9 @@ export class ArtifactRegistry implements IArtifactRegistry {
     }
   }
   private _patchFor(key: string, value: any): any {
-    return { op: 'replace', key: `/${key}`, value };
+    return value !== null
+      ? { op: 'replace', path: `/${key}`, value }
+      : { op: 'remove', path: `/${key}` }
   }
 }
 
