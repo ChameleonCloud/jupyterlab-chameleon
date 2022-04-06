@@ -557,9 +557,9 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
                 contents_urn, artifact["path"], None, artifact["ownership"]
             )
             try:
-                self.db.update_artifact(local_artifact)
-            except DuplicateArtifactError:
                 self.db.insert_artifact(local_artifact)
+            except DuplicateArtifactError:
+                self.db.update_artifact(local_artifact)
 
             self.set_status(201)
             self.write(artifact)
