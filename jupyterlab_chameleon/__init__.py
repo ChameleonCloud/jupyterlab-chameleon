@@ -39,7 +39,6 @@ def _load_jupyter_server_extension(server_app: "NotebookApp"):
     # Prepend the base_url so that it works in a jupyterhub setting
     base_url = web_app.settings["base_url"]
     base_endpoint = url_path_join(base_url, "chameleon")
-    contents_endpoint = url_path_join(base_endpoint, "contents")
     artifact_endpoint = url_path_join(base_endpoint, "artifacts")
     heartbeat_endpoint = url_path_join(base_endpoint, "heartbeat")
 
