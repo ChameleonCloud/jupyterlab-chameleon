@@ -66,7 +66,7 @@ def init_db(server_app: "NotebookApp", db: "DB"):
     try:
         db.build_schema()
         # Also check if there is an initial artifact on the environment.
-        artifact_id = os.getenv("ARTIFACT_ID")
+        artifact_id = os.getenv("ARTIFACT_CONTENTS_ID")
         if artifact_id:
             # Clear any existing artifacts; this is an ephemeral artifact
             # environment and it is OK to clean up for sanity. We can't do
@@ -77,7 +77,7 @@ def init_db(server_app: "NotebookApp", db: "DB"):
                 LocalArtifact(
                     path="",
                     id=artifact_id,
-                    deposition_repo=os.getenv("ARTIFACT_DEPOSITION_REPO"),
+                    deposition_repo=os.getenv("ARTIFACT_CONTENTS_REPO"),
                     ownership=os.getenv("ARTIFACT_OWNERSHIP"),
                 )
             )
