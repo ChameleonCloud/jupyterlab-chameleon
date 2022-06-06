@@ -3,14 +3,6 @@ import { Token } from '@lumino/coreutils';
 export interface IArtifactSharingURL {
   indexUrl(): string;
   detailUrl(externalId: string): string;
-  createUrl(depositionId: string, depositionRepo: string): string;
-  updateUrl(externalId: string): string;
-  newVersionUrl(
-    externalId: string,
-    depositionId: string,
-    depositionRepo: string
-  ): string;
-  isExternalUrl(origin: string): boolean;
 }
 
 export enum ArtifactVisibility {

@@ -66,8 +66,8 @@ def init_db(server_app: "NotebookApp", db: "DB"):
     try:
         db.build_schema()
         # Also check if there is an initial artifact on the environment.
-        artifact_id = os.getenv("ARTIFACT_CONTENTS_ID")
-        if artifact_id:
+        artifact_urn = os.getenv("ARTIFACT_CONTENTS_URN")
+        if artifact_urn:
             # Clear any existing artifacts; this is an ephemeral artifact
             # environment and it is OK to clean up for sanity. We can't do
             # this in a "workbench" server because the user may have multiple
@@ -76,8 +76,8 @@ def init_db(server_app: "NotebookApp", db: "DB"):
             db.insert_artifact(
                 LocalArtifact(
                     path="",
-                    id=artifact_id,
-                    deposition_repo=os.getenv("ARTIFACT_CONTENTS_REPO"),
+                    id=artifact_urn,
+                    deposition_repo=None,
                     ownership=os.getenv("ARTIFACT_OWNERSHIP"),
                 )
             )

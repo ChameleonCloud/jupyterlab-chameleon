@@ -34,31 +34,6 @@ export class ArtifactSharingURL implements IArtifactSharingURL {
       externalId
     );
   }
-  createUrl(depositionId: string, depositionRepo: string): string {
-    return this._makeUrl('externalCreateEndpoint')
-      .replace('{depositionId}', depositionId)
-      .replace('{depositionRepo}', depositionRepo);
-  }
-  updateUrl(externalId: string): string {
-    return this._makeUrl('externalUpdateEndpoint').replace(
-      '{externalId}',
-      externalId
-    );
-  }
-  newVersionUrl(
-    externalId: string,
-    depositionId: string,
-    depositionRepo: string
-  ): string {
-    return this._makeUrl('externalNewVersionEndpoint')
-      .replace('{externalId}', externalId)
-      .replace('{depositionId}', depositionId)
-      .replace('{depositionRepo}', depositionRepo);
-  }
-
-  isExternalUrl(origin: string): boolean {
-    return this._baseUrl.indexOf(origin) === 0;
-  }
 
   private get _baseUrl(): string {
     return this._settings.get('externalBaseUrl').composite as string;
