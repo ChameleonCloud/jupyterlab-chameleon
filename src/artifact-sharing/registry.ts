@@ -8,6 +8,29 @@ const ALLOWED_UPDATE_KEYS: ArtifactEditableFields[] = [
   'title', 'short_description', 'long_description', 'authors', 'visibility',
 ]
 
+/**
+ * Formats Trovi errors in a more user-friendly format.
+ */
+const handleTroviError = function (message: any): string {
+  if (!(message instanceof Object)) {
+    try {
+      message = JSON.parse(message);
+    } catch {
+      return message;
+    }
+  }
+  let newMessage = '';
+  Object.keys(message).forEach((key: string) => {
+    const value = message[key];
+    if (value instanceof Object) {
+      newMessage += `${key}: ${handleTroviError(value)}\n`;
+    } else {
+      newMessage += `${value}\n`;
+    }
+  });
+  return newMessage;
+};
+
 export class ArtifactRegistry implements IArtifactRegistry {
   async createArtifact(artifact: Artifact): Promise<Artifact> {
     const res = await ServerConnection.makeRequest(
@@ -135,11 +158,13 @@ namespace Private {
 
   export async function handleNewVersionResponse(res: Response): Promise<ArtifactVersion> {
     if (!res.ok) {
-      let error = JSON.stringify((await res.json()).error);
+      let error = (await res.json()).error;
       if (!error) {
-        error = "Unknown"
+        error = 'Unknown';
       }
-      const message = `An error occurred creating the artifact version: ${error}`;
+      const message = `An error occurred creating the artifact version: ${handleTroviError(
+        error
+      )}`;
       throw new ServerConnection.ResponseError(res, message);
     }
 
@@ -150,12 +175,14 @@ namespace Private {
 
   export async function handleCreateResponse(res: Response, old: Artifact): Promise<Artifact> {
     if (!res.ok) {
-      let error = JSON.stringify((await res.json()).error);
+      let error = (await res.json()).error;
       if (!error) {
-        error = "Unknown"
+        error = 'Unknown';
       }
 
-      const message = `An error occurred creating the artifact: ${error}`;
+      const message = `An error occurred creating the artifact: ${handleTroviError(
+        error
+      )}`;
       throw new ServerConnection.ResponseError(res, message);
     }
 
