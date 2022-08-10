@@ -1,15 +1,16 @@
+import shutil
+
 import json
 import logging
 import os
 import requests
-import tarfile
 import tempfile
 
 from jupyter_server.base.handlers import APIHandler
 from keystoneauth1.exceptions.http import Unauthorized
 from requests import HTTPError
 from tornado import web
-from traitlets import Any, CRegExp, Int
+from traitlets import Any, Tuple
 from traitlets.config import LoggingConfigurable
 
 from .db import DB, LocalArtifact, DuplicateArtifactError
@@ -129,22 +130,12 @@ def default_prepare_list():
 
 
 class ArtifactArchiver(LoggingConfigurable):
-    ignored_file_pattern = CRegExp(
+    ignored_file_pattern = Tuple(
         config=True,
-        default_value=r"(\.chameleon|\.ipynb_checkpoints|\.git|\.ssh)/.*$",
+        default_value=(".chameleon", ".ipynb_checkpoints", ".git", ".ssh"),
         help=(
-            "A regex pattern of files/directories to ignore when packaaging"
+            "A tuple of glob patterns of files/directories to ignore when packaging"
             "the archive."
-        ),
-    )
-
-    max_archive_size = Int(
-        config=True,
-        default_value=(1024 * 1024 * 500),
-        help=(
-            "The maximum size of the archive, before compression. The sum of "
-            "all file sizes (in bytes) in the archive must be less than this "
-            "number. Defaults to 500MB."
         ),
     )
 
@@ -166,33 +157,34 @@ class ArtifactArchiver(LoggingConfigurable):
             FileNotFoundError: if the input path does not exist
         """
 
-        def should_include(file):
-            return not self.ignored_file_pattern.search(file)
-
         if not os.path.isdir(path):
             raise ValueError("Input path must be a directory")
 
-        temp_dir = tempfile.mkdtemp()
-        archive = os.path.join(temp_dir, f"{os.path.basename(path)}.tar.gz")
-        total_size = 0
+        read_dir = tempfile.mkdtemp()                    # /tmp/r
+        read_base = os.path.basename(path)               # src
+        write_dir = tempfile.mkdtemp()                   # /tmp/w
+        write_base = os.path.join(write_dir, read_base)  # /tmp/w/src
 
-        with tarfile.open(archive, "w:gz") as tarf:
-            for root, _, files in os.walk(path):
-                for f in files:
-                    absfile = os.path.join(root, f)
-                    if not should_include(absfile):
-                        continue
-                    if not os.path.islink(absfile):
-                        total_size += os.path.getsize(absfile)
-                        if total_size > self.max_archive_size:
-                            raise ValueError("Exceeded max archive size")
-                    # Remove leading path information
-                    tarf.add(absfile, arcname=absfile.replace(path, ""))
+        # Copy all the files we want to include in the archive to a temp dir.
+        # We do this to filter out the ignored patterns.
+        # There is no utility to ignore files with shutil.make_archive
+        shutil.copytree(
+            path,
+            os.path.join(read_dir, read_base),
+            ignore=shutil.ignore_patterns(*self.ignored_file_pattern)
+        )
+        # archive /tmp/r/src -> /tmp/w/src.tar.gz
+        archive = shutil.make_archive(
+            write_base, "gztar", root_dir=read_dir, base_dir=read_base
+        )
 
-        size_mb = total_size / 1024 / 1024
+        size_mb = os.path.getsize(archive) / 1024 / 1024
         self.log.info(
             f"Exported archive of {path} at {archive} (total {size_mb:.2f}MB)"
         )
+
+        # Clear out the workdir copy
+        shutil.rmtree(read_dir)
 
         return archive
 
