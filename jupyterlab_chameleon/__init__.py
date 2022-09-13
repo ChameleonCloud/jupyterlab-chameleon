@@ -73,9 +73,12 @@ def init_db(server_app: "NotebookApp", db: "DB"):
             # this in a "workbench" server because the user may have multiple
             # artifacts linked to their working directory persisted.
             db.reset()
+            # The wordir script saves the artifact dir name in a file in /tmp
+            with open(os.getenv("ARTIFACT_DIR_NAME_FILE"), "r") as f:
+                artifact_path = f.read().strip()
             db.insert_artifact(
                 LocalArtifact(
-                    path="",
+                    path=os.path.join(server_app.notebook_dir, artifact_path),
                     id=artifact_urn,
                     deposition_repo=None,
                     ownership=os.getenv("ARTIFACT_OWNERSHIP"),
