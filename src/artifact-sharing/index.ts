@@ -1,7 +1,20 @@
-import { ILayoutRestorer, IRouter, JupyterFrontEnd, JupyterFrontEndPlugin } from '@jupyterlab/application';
-import { ICommandPalette, MainAreaWidget, WidgetTracker } from '@jupyterlab/apputils';
+import {
+  ILayoutRestorer,
+  IRouter,
+  JupyterFrontEnd,
+  JupyterFrontEndPlugin
+} from '@jupyterlab/application';
+import {
+  ICommandPalette,
+  MainAreaWidget,
+  WidgetTracker
+} from '@jupyterlab/apputils';
 import { IDocumentManager } from '@jupyterlab/docmanager';
-import { DirListing, FileBrowser, IFileBrowserFactory } from '@jupyterlab/filebrowser';
+import {
+  DirListing,
+  FileBrowser,
+  IFileBrowserFactory
+} from '@jupyterlab/filebrowser';
 import fileBrowserPlugins from '@jupyterlab/filebrowser-extension';
 import { IMainMenu } from '@jupyterlab/mainmenu';
 import { Contents } from '@jupyterlab/services';
@@ -11,6 +24,7 @@ import { ITranslator } from '@jupyterlab/translation';
 import { toArray } from '@lumino/algorithm';
 import { Menu } from '@lumino/widgets';
 import { DirListingRenderer } from './filebrowser';
+import { CellExecutionCount } from './metrics';
 import { ArtifactRegistry } from './registry';
 import { IArtifactRegistry, IArtifactSharingURL, Workflow } from './tokens';
 import { ArtifactSharingWidget } from './widget';
@@ -19,6 +33,7 @@ const PLUGIN_NAMESPACE = '@chameleoncloud/jupyterlab-chameleon';
 const WIDGET_PLUGIN_ID = `${PLUGIN_NAMESPACE}:artifact-sharing`;
 const FILE_BROWSER_PLUGIN_ID = `${PLUGIN_NAMESPACE}:file-browser-factory`;
 const REGISTRY_PLUGIN_ID = `${PLUGIN_NAMESPACE}:artifact-registry`;
+const METRIC_PLUGIN_ID_PREFIX = `${PLUGIN_NAMESPACE}:metric-`;
 
 export class ArtifactSharingURL implements IArtifactSharingURL {
   constructor(settings: ISettingRegistry.ISettings) {
@@ -106,11 +121,12 @@ const plugin: JupyterFrontEndPlugin<void> = {
     Promise.all([
       settingRegistry.load(WIDGET_PLUGIN_ID),
       app.restored,
-      artifactRegistry.getArtifacts()
-        .catch((err) => {
-          console.error('Error fetching list of local artifacts, defaulting to empty list.');
-          return [];
-        })
+      artifactRegistry.getArtifacts().catch(err => {
+        console.error(
+          'Error fetching list of local artifacts, defaulting to empty list.'
+        );
+        return [];
+      })
     ])
       .then(async ([settings]) => {
         const browser = fileBrowserFactory.defaultBrowser;
@@ -255,8 +271,8 @@ class FileBrowserHelper {
     if (!artifact) {
       // Generate a new placeholder artifact for the given path.
       artifact = {
-        title: "",
-        short_description: "",
+        title: '',
+        short_description: '',
         authors: [],
         linked_projects: [],
         reproducibility: { enable_requests: false },
@@ -264,7 +280,7 @@ class FileBrowserHelper {
         versions: [],
         newLinks: [],
         path: item.path,
-        ownership: "fork"
+        ownership: 'fork'
       };
     }
     return artifact;
@@ -337,11 +353,10 @@ const fileBrowserFactoryPlugin: JupyterFrontEndPlugin<IFileBrowserFactory> = {
     // @ts-ignore: ignore our hacky overriding of a readonly property.
     DirListing.defaultRenderer = new DirListingRenderer(artifactRegistry);
     // Find the existing FileBrowser factory plugin
-    const factoryPlugin: JupyterFrontEndPlugin<IFileBrowserFactory> = fileBrowserPlugins.find(
-      ({ id }) => {
+    const factoryPlugin: JupyterFrontEndPlugin<IFileBrowserFactory> =
+      fileBrowserPlugins.find(({ id }) => {
         return id === '@jupyterlab/filebrowser-extension:factory';
-      }
-    );
+      });
     return factoryPlugin.activate(
       app,
       docManager,
@@ -362,4 +377,17 @@ const artifactRegistryPlugin: JupyterFrontEndPlugin<IArtifactRegistry> = {
   }
 };
 
-export default [plugin, fileBrowserFactoryPlugin, artifactRegistryPlugin];
+const cellExecutionCountPlugin: JupyterFrontEndPlugin<void> = {
+  id: `${METRIC_PLUGIN_ID_PREFIX}cell-exection-count`,
+  activate(app: JupyterFrontEnd) {
+    new CellExecutionCount();
+  },
+  autoStart: true
+};
+
+export default [
+  plugin,
+  fileBrowserFactoryPlugin,
+  artifactRegistryPlugin,
+  cellExecutionCountPlugin
+];

@@ -4,5 +4,7 @@ create table if not exists artifacts (
   [id] text,
   [path] text,
   [deposition_repo] text,
-  [ownership] text
+  [ownership] text,
+  [artifact_uuid] text,
+  [artifact_version_slug] text
 );

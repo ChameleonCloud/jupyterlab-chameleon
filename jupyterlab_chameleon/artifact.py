@@ -19,8 +19,13 @@ from .exception import (
     IllegalArchiveError,
     BadRequestError,
 )
-from .trovi import contents_url, get_trovi_token, artifacts_url, artifact_versions_url
-from .util import ErrorResponder
+from .trovi import (
+    contents_url,
+    get_trovi_token,
+    artifacts_url,
+    artifact_versions_url,
+)
+from .util import ErrorResponder, call_jupyterhub_api
 
 LOG = logging.getLogger(__name__)
 
@@ -373,6 +378,17 @@ class ArtifactAPIClient(LoggingConfigurable):
         self.log.info(f"Fetched {len(artifacts)} artifacts.")
         return artifacts
 
+    def metric(self, uuid: str, slug: str, metric: str):
+        call_jupyterhub_api(
+            "trovi_metrics",
+            query=[
+                ('origin', get_trovi_token()["access_token"]),
+                ('metric', metric),
+                ('artifact_uuid', uuid),
+                ('artifact_version_slug', slug),
+            ],
+        )
+
     def _to_version_request(self, artifact: dict):
         req = {}
         if contents := artifact.get("newContents"):
@@ -559,4 +575,59 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             )
         except Exception as err:
             self.log.exception("An Unknown error occured")
+            return self.error_response(500, str(err))
+
+
+class ArtifactMetricHandler(APIHandler, ErrorResponder):
+
+    def initialize(self, db: DB = None, notebook_dir: str = None):
+        self.api_client = ArtifactAPIClient(config=self.config)
+        self.db = db
+        self.notebook_dir = notebook_dir or "."
+
+    @web.authenticated
+    def put(self):
+        """Edit metric for an existing artifact."""
+        self.check_xsrf_cookie()
+
+        body = json.loads(self.request.body.decode("utf-8"))
+
+        uuid = None
+        version_slug = None
+        try:
+            local_contents = {
+                os.path.relpath(
+                    la.path, self.notebook_dir
+                ).replace("./", ""): (la.artifact_uuid, la.artifact_version_slug)
+                for la in self.db.list_artifacts()
+            }
+            artifact_path = body.pop("path", "")
+            if artifact_path in local_contents:
+                uuid = local_contents[artifact_path][0]
+                version_slug = local_contents[artifact_path][1]
+        except Exception as err:
+            self.log.exception("Unable to get artifact metadata")
+            return self.error_response(500, str(err))
+
+        try:
+            if uuid and version_slug:
+                metric_name = body.pop("metric")
+                if not metric_name:
+                    return self.error_response(400, "Missing metric name")
+
+                self.api_client.metric(
+                    uuid, version_slug, metric_name
+                )
+            self.set_status(200)
+            self.finish()
+        except json.JSONDecodeError as err:
+            return self.error_response(400, str(err))
+        except (AuthenticationError, Unauthorized) as err:
+            return self.error_response(401, str(err))
+        except HTTPError as err:
+            return self.error_response(
+                err.response.status_code, str(err.response.content, "utf-8")
+            )
+        except Exception as err:
+            self.log.exception("An unknown error occurred")
             return self.error_response(500, str(err))

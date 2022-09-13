@@ -22,6 +22,10 @@ class LocalArtifact:
     deposition_repo: str
     # Whether the user owns the artifact or not (e.g., "own", "fork")
     ownership: str
+    # The artifact UUID
+    artifact_uuid: str
+    # The artifact verion slug
+    artifact_version_slug: str
 
 
 ARTIFACT_COLUMNS = [f.name for f in fields(LocalArtifact)]
@@ -65,7 +69,7 @@ class DB:
             cur.execute(
                 (
                     f'insert into artifacts ({",".join(ARTIFACT_COLUMNS)}) '
-                    "values (?, ?, ?, ?)"
+                    "values (?, ?, ?, ?, ?, ?)"
                 ),
                 astuple(artifact),
             )
