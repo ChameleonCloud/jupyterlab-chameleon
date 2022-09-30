@@ -9,6 +9,7 @@ from .artifact import ArtifactMetadataHandler
 from .db import LocalArtifact, DB
 from .heartbeat import HeartbeatHandler
 from ._version import __version__
+from jupyterlab_chameleon.artifact import ArtifactMetricHandler
 
 if TYPE_CHECKING:
     from notebook.notebookapp import NotebookApp
@@ -41,6 +42,7 @@ def _load_jupyter_server_extension(server_app: "NotebookApp"):
     base_endpoint = url_path_join(base_url, "chameleon")
     artifact_endpoint = url_path_join(base_endpoint, "artifacts")
     heartbeat_endpoint = url_path_join(base_endpoint, "heartbeat")
+    metric_endpoint = url_path_join(base_endpoint, "metrics")
 
     db = DB(database=f"{notebook_dir}/.chameleon/chameleon.db")
 
@@ -49,6 +51,11 @@ def _load_jupyter_server_extension(server_app: "NotebookApp"):
         (
             artifact_endpoint,
             ArtifactMetadataHandler,
+            {"db": db, "notebook_dir": notebook_dir},
+        ),
+        (
+            metric_endpoint,
+            ArtifactMetricHandler,
             {"db": db, "notebook_dir": notebook_dir},
         ),
     ]
@@ -82,6 +89,8 @@ def init_db(server_app: "NotebookApp", db: "DB"):
                     id=artifact_urn,
                     deposition_repo=None,
                     ownership=os.getenv("ARTIFACT_OWNERSHIP"),
+                    artifact_uuid=os.getenv("ARTIFACT_UUID"),
+                    artifact_version_slug=os.getenv("ARTIFACT_VERSION_SLUG"),
                 )
             )
     except Exception:
