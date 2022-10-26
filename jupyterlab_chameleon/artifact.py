@@ -165,9 +165,9 @@ class ArtifactArchiver(LoggingConfigurable):
         if not os.path.isdir(path):
             raise ValueError("Input path must be a directory")
 
-        read_dir = tempfile.mkdtemp()                    # /tmp/r
-        read_base = os.path.basename(path)               # src
-        write_dir = tempfile.mkdtemp()                   # /tmp/w
+        read_dir = tempfile.mkdtemp()  # /tmp/r
+        read_base = os.path.basename(path)  # src
+        write_dir = tempfile.mkdtemp()  # /tmp/w
         write_base = os.path.join(write_dir, read_base)  # /tmp/w/src
 
         # Copy all the files we want to include in the archive to a temp dir.
@@ -470,7 +470,12 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             artifact["ownership"] = "own"
 
             local_artifact = LocalArtifact(
-                contents_urn, artifact["path"], None, artifact["ownership"]
+                id=contents_urn,
+                path=artifact["path"],
+                deposition_repo=None,
+                ownership=artifact["ownership"],
+                artifact_uuid=artifact["uuid"],
+                artifact_version_slug=artifact["versions"][0]["slug"],
             )
             try:
                 self.db.insert_artifact(local_artifact)
