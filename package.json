@@ -1,6 +1,6 @@
 {
   "name": "@chameleoncloud/jupyterlab-chameleon",
-  "version": "3.0.9",
+  "version": "3.0.10",
   "description": "JupyterLab extension for the Chameleon testbed",
   "keywords": [
     "jupyter",
