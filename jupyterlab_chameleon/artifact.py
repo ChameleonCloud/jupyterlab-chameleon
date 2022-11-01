@@ -381,12 +381,13 @@ class ArtifactAPIClient(LoggingConfigurable):
     def metric(self, uuid: str, slug: str, metric: str):
         call_jupyterhub_api(
             "trovi_metrics",
-            query=[
-                ('origin', get_trovi_token()["access_token"]),
-                ('metric', metric),
-                ('artifact_uuid', uuid),
-                ('artifact_version_slug', slug),
-            ],
+            body={
+                "origin": get_trovi_token()["access_token"],
+                "metric": metric,
+                "artifact_uuid": uuid,
+                "artifact_version_slug": slug,
+            },
+            method="PUT",
         )
 
     def _to_version_request(self, artifact: dict):
