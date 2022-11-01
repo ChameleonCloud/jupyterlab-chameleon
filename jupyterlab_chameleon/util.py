@@ -1,5 +1,7 @@
+from typing import Optional, Tuple, List
+
 import os
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 
@@ -8,7 +10,12 @@ from .exception import AuthenticationError, JupyterHubNotDetected
 ACCESS_TOKEN_ENDPOINT = 'tokens'
 
 
-def call_jupyterhub_api(path: str, query: 'list[tuple[str,str]]'=[], method: str='GET') -> dict:
+def call_jupyterhub_api(
+    path: str,
+    query: Optional[List[Tuple[str, str]]] = None,
+    body: Optional[dict] = None,
+    method: str = 'GET'
+) -> dict:
     hub_api_url = os.getenv('JUPYTERHUB_API_URL')
     hub_token = os.getenv('JUPYTERHUB_API_TOKEN')
 
@@ -18,16 +25,23 @@ def call_jupyterhub_api(path: str, query: 'list[tuple[str,str]]'=[], method: str
     hub_url_parsed = urlsplit(hub_api_url)
     hub_url_replaced = hub_url_parsed._replace(
         path=(f'{hub_url_parsed.path}/{path.lstrip("/")}'),
-        query=urlencode(query),
     )
     url = urlunsplit(hub_url_replaced)
     res = requests.request(
         url=url,
         method=method,
-        headers={'authorization': f'token {hub_token}'})
+        params=query,
+        json=body,
+        headers={
+            "authorization": f"token {hub_token}",
+            "content-type": "application/json",
+        }
+    )
     res.raise_for_status()
 
-    return res.json()
+    if res.content:
+        return res.json()
+    return {}
 
 
 def jupyterhub_public_url(path: str) -> str:
@@ -61,7 +75,7 @@ def refresh_access_token(source_ident=None) -> 'tuple[str,int]':
 
 
 class ErrorResponder:
-     def error_response(self, status=400, message='unknown error', **kwargs):
+    def error_response(self, status=400, message='unknown error', **kwargs):
         self.set_status(status)
         self.write({
             **kwargs,
