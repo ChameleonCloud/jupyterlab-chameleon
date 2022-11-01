@@ -13,3 +13,7 @@ publish:
 .PHONY: watch
 watch:
 	jlpm watch
+
+.PHONY: notebook-build
+notebook-build:
+	docker build -t jupyterhub-user:dev .

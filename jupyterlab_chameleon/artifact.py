@@ -470,14 +470,27 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             artifact["path"] = path
             artifact["ownership"] = "own"
 
-            local_artifact = LocalArtifact(
-                id=contents_urn,
-                path=artifact["path"],
-                deposition_repo=None,
-                ownership=artifact["ownership"],
-                artifact_uuid=artifact["uuid"],
-                artifact_version_slug=artifact["versions"][0]["slug"],
-            )
+            # NOTE `api_client.create` will return either a version or a new
+            # artifact. We check to see which one it returned based on if we
+            # had a uid in the first place
+            if artifact.get("uuid"):
+                local_artifact = LocalArtifact(
+                    id=contents_urn,
+                    path=artifact["path"],
+                    deposition_repo=None,
+                    ownership=artifact["ownership"],
+                    artifact_uuid=artifact["uuid"],
+                    artifact_version_slug=artifact["versions"][0]["slug"],
+                )
+            else:
+                local_artifact = LocalArtifact(
+                    id=contents_urn,
+                    path=artifact["path"],
+                    deposition_repo=None,
+                    ownership=artifact["ownership"],
+                    artifact_uuid=body["uuid"],
+                    artifact_version_slug=artifact["slug"],
+                )
             try:
                 self.db.insert_artifact(local_artifact)
             except DuplicateArtifactError:

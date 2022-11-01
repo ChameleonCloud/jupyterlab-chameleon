@@ -1,0 +1,30 @@
+# JupyterLab extensions
+ipyleaflet~=0.14
+ipywidgets~=7.5
+tqdm~=4.0
+
+# IPython kernels
+bash_kernel
+
+# Commonly-used libraries
+ansible~=2.0
+jupyterplot~=0.0.3
+matplotlib~=3.0
+numpy~=1.15
+pandas~=1.0
+paho-mqtt~=1.5
+
+# For IPython tab-completion
+pyreadline
+
+# FIXME(jason):
+# This shouldn't be necessary once 
+# https://github.com/jupyter/jupyter_client/issues/702 is addressed.
+pyzmq~=22.2.0
+
+# FIXME(jason):
+# Currently needed for custom forks of OS clients to install
+packaging>=20.0
+
+# For installing dev extensions
+jupyter-packaging

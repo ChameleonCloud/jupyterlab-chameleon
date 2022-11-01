@@ -45,6 +45,8 @@ def get_trovi_token():
     """
     Exchange the user's auth token for a trovi token.
     """
+    LOG.info("Getting a trovi token!!!!")
+    LOG.info(os.environ["TROVI_URL"])
     trovi_resp = requests.post(
         urljoin(TROVI_URL, "/token/"),
         headers={"Content-Type": "application/json", "Accept": "application/json"},
