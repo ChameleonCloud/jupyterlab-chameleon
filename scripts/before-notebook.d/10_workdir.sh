@@ -1,9 +1,5 @@
 set -x
 
-touch /tmp/log.txt
-echo "debugging" >> /tmp/log.txt
-echo "NB_USER: $NB_USER" >> /tmp/log.txt
-
 workdir=/work
 expdir=/exp
 archivedir=/tmp/_archive
@@ -49,9 +45,6 @@ git_fetch() {
 
 setup_default_server() {
   # Copy examples and other "first launch" files over.
-  ls -ld /etc/jupyter/serverroot
-  ls -ld $workdir/
-  whoami
   rsync -aq /etc/jupyter/serverroot/ $workdir/
 }
 
@@ -98,5 +91,7 @@ fi
 # Our volume mount is at the root directory, link it in to the user's
 # home directory for convenience.
 rm -rf "/home/$NB_USER/work" && ln -s "$workdir" "/home/$NB_USER/work"
-chown "$NB_USER:" "/home/$NB_USER/work"
+rsync -a /etc/jupyter/bashrc.d/ /home/$NB_USER/.bashrc.d
+chown -R "$NB_USER:" "/home/$NB_USER"
+chown -R "$NB_USER:" "$workdir"
 set +x

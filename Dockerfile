@@ -43,7 +43,7 @@ RUN rm -f /tmp/notebook-requirements.txt
 
 RUN python3 -m bash_kernel.install
 
-FROM base as chameleon
+FROM base as release
 
 COPY scripts/chi-requirements.txt /tmp/chi-requirements.txt
 
@@ -61,24 +61,20 @@ RUN jupyter serverextension enable jupyterlab_chameleon
 #
 
 COPY scripts/start-notebook.d/* /usr/local/bin/start-notebook.d/
-RUN chown jovyan:100 -R /usr/local/bin/start-notebook.d
-
 COPY scripts/before-notebook.d/* /usr/local/bin/before-notebook.d/
-RUN chown jovyan:100 -R /usr/local/bin/before-notebook.d
 
 # Everything in serverroot gets copied to the user's working directory on start
 RUN mkdir -p /etc/jupyter/serverroot
 COPY scripts/serverroot/* /etc/jupyter/serverroot/
-#RUN chown jovyan:100 -R /etc/jupyter
 
-COPY scripts/bashrc.d /home/jovyan/.bashrc.d
-RUN chown jovyan:100 -R /home/jovyan/.bashrc.d
+COPY scripts/bashrc.d /etc/jupyter/bashrc.d
+#RUN chown eovyan:100 -R /home/jovyan/.bashrc.d
 #COPY scripts/start-notebook-dev.sh /usr/local/bin/
 
-#RUN mkdir -p /work && chown jovyan:100 -R /work
-RUN mkdir -p /data && chown jovyan:100 -R /data
+#RUN mkdir -p /data && chown jovyan:100 -R /data
+
+FROM release as dev
 
 COPY . /ext
 RUN pip install /ext
-
-#USER jovyan
+#RUN mkdir -p /work

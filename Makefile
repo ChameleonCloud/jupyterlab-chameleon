@@ -16,4 +16,9 @@ watch:
 
 .PHONY: notebook-build
 notebook-build:
-	docker build -t jupyterhub-user:dev .
+	docker build -t docker.chameleoncloud.org/jupyterhub-user:dev .
+
+.PHONY: notebook-publish
+notebook-publish:
+	docker build --no-cache --platform linux/amd64 -t docker.chameleoncloud.org/jupyterhub-user:dev .
+	docker push docker.chameleoncloud.org/jupyterhub-user:dev
