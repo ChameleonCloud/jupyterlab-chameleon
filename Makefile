@@ -1,3 +1,10 @@
+DOCKER_REGISTRY = docker.chameleoncloud.org
+IMAGE_NAME = jupyterhub-user
+DEV_TARGET = dev
+RELEASE_TARGET = release
+RELEASE_PLATFORM = linux/amd64
+TAG_VERSION = $(shell git log -n1 --format=%h -- .)
+
 .PHONY: setup
 setup:
 	@echo "NOTE: this will take a while because we have to build the client "
@@ -17,6 +24,10 @@ watch:
 .PHONY: notebook-build
 notebook-build:
 	docker build -t docker.chameleoncloud.org/jupyterhub-user:dev .
+
+.PHONY: hub-build-release
+notebook-build-release:
+	docker build --platform $(RELEASE_PLATFORM) -t $(DOCKER_REGISTRY)/$(IMAGE_NAME):$(TAG_VERSION) --target $(RELEASE_TARGET) .
 
 .PHONY: notebook-publish
 notebook-publish:
