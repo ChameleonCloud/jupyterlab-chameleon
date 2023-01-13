@@ -3,8 +3,8 @@
 
 _with_token() {
   access_token=$(curl -s -H"authorization: token $JUPYTERHUB_API_TOKEN" \
-    "$JUPYTERHUB_API_URL/tokens" \
-    | jq -r .access_token)
+    "$JUPYTERHUB_API_URL/users/$JUPYTERHUB_USER" \
+    | jq -r .auth_state.access_token)
   if [[ "$access_token" != "null" ]]; then
     export OS_ACCESS_TOKEN="$access_token"
   fi
