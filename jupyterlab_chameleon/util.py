@@ -4,6 +4,7 @@ import os
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
+import time
 
 from .exception import AuthenticationError, JupyterHubNotDetected
 
@@ -70,7 +71,8 @@ def refresh_access_token(source_ident=None) -> 'tuple[str,int]':
     access_token = res.get("auth_state").get('access_token')
     expires_at = res.get("auth_state").get('expires_at')
 
-    if not access_token:
+    should_refresh = expires_at - time.time() < 120
+    if not access_token or should_refresh:
         raise AuthenticationError(f'Failed to get access token: {res}')
 
     return access_token, expires_at
