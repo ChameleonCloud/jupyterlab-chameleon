@@ -3,6 +3,7 @@ import shutil
 import json
 import logging
 import os
+import re
 import requests
 import tempfile
 
@@ -614,13 +615,18 @@ class ArtifactMetricHandler(APIHandler, ErrorResponder):
         uuid = None
         version_slug = None
         try:
-            local_contents = {
-                os.path.relpath(
-                    la.path, self.notebook_dir
-                ).replace("./", ""): (la.artifact_uuid, la.artifact_version_slug)
-                for la in self.db.list_artifacts()
-            }
             artifact_path = body.pop("path", "")
+            local_contents = {}
+            for la in self.db.list_artifacts():
+                p = la.path
+                # Remove prefix `/home/$USER/work` if applicable, we want to
+                # normalize relative to `/work` (notebook_dir)
+                user_home = os.getenv("HOME")
+                p = re.sub(re.escape(user_home) +'/work/', '', p)
+                # Strip out the `./`
+                p = p.replace("./", "")
+                p = os.path.relpath(p, self.notebook_dir)
+                local_contents[p] = (la.artifact_uuid, la.artifact_version_slug)
             if artifact_path in local_contents:
                 uuid = local_contents[artifact_path][0]
                 version_slug = local_contents[artifact_path][1]

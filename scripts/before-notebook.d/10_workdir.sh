@@ -52,8 +52,8 @@ setup_experiment_server() {
   if [[ "${ARTIFACT_CONTENTS_PROTO:-}" == "http" ]]; then
     echo "Downloading via wget"
     mkdir -p $archivedir
-    wget -P $archivedir "$ARTIFACT_CONTENTS_URL"
-    archivefile="$archivedir/$(find $archivedir -type f -exec basename {} \; | head -n1)"
+    wget "$ARTIFACT_CONTENTS_URL" -O "$archivedir/artifact_archive"
+    archivefile="$archivedir/artifact_archive"
   elif [[ "${ARTIFACT_CONTENTS_PROTO:-}" == "git" ]]; then
     echo "Fetching with git"
     git_fetch "$ARTIFACT_CONTENTS_URL" $workdir
@@ -65,6 +65,9 @@ setup_experiment_server() {
   pushd $workdir
 
   if [[ -n "${archivefile:-}" ]]; then
+    # If we imported an experiment, we'll save the name of its root dir so that
+    # the extension knows about it
+    (zipinfo -1 "${archivefile}" || tar -tf "${archivefile}") | head -n 1 2> /dev/null > "${ARTIFACT_DIR_NAME_FILE}"
     unzip -n -d $workdir $archivefile || tar -C $workdir -xf $archivefile \
       && rm $archivefile || {
         echo "Failed to extract $archivefile, copying entire file."
