@@ -14,8 +14,8 @@ setup:
 .PHONY: publish
 publish:
 	@ rm -rf build/ dist/
-	python -m build
-	twine upload dist/*
+	python3 -m build
+	twine upload -u chameleoncloud dist/*
 
 .PHONY: watch
 watch:
