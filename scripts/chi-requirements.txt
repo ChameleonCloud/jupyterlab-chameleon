@@ -1,0 +1,19 @@
+keystoneauth1
+python-cinderclient
+python-glanceclient
+python-ironicclient
+python-keystoneclient
+python-neutronclient
+python-novaclient
+python-openstackclient
+python-swiftclient
+
+# Chameleon forks
+git+https://github.com/ChameleonCloud/python-blazarclient@chameleoncloud/xena#egg=python-blazarclient
+git+https://github.com/ChameleonCloud/python-heatclient@chameleoncloud/xena#egg=python-heatclient
+git+https://github.com/ChameleonCloud/python-zunclient@chameleoncloud/xena#egg=python-zunclient
+
+# ChameleonCloud-provided
+jupyterlab_chameleon~=3.0.14
+python-chi~=0.17.6
+
