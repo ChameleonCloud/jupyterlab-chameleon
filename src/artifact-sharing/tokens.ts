@@ -71,7 +71,7 @@ export type Artifact = {
   readonly path: string;
 }
 
-export type Workflow = 'upload' | 'edit';
+export type Workflow = 'upload' | 'edit' | 'link';
 
 export const IArtifactRegistry = new Token<IArtifactRegistry>(
   '@jupyterlab_zenodo:IZenodoRegistry'

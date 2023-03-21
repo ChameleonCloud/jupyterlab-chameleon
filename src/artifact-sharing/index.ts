@@ -12,18 +12,16 @@ import {
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import {
   DirListing,
-  FileBrowser,
   IFileBrowserFactory
 } from '@jupyterlab/filebrowser';
 import fileBrowserPlugins from '@jupyterlab/filebrowser-extension';
 import { IMainMenu } from '@jupyterlab/mainmenu';
-import { Contents } from '@jupyterlab/services';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { IStateDB } from '@jupyterlab/statedb';
 import { ITranslator } from '@jupyterlab/translation';
-import { toArray } from '@lumino/algorithm';
 import { Menu } from '@lumino/widgets';
 import { DirListingRenderer } from './filebrowser';
+import { FileBrowserHelper } from './file-browser-helper';
 import { CellExecutionCount } from './metrics';
 import { ArtifactRegistry } from './registry';
 import { IArtifactRegistry, IArtifactSharingURL, Workflow } from './tokens';
@@ -185,6 +183,24 @@ const plugin: JupyterFrontEndPlugin<void> = {
           }
         });
 
+        app.commands.addCommand(CommandIDs.link, {
+          label: 'Link to existing artifact',
+          isEnabled: enableCreate,
+          async execute() {
+            // TODO don't openwidget at all, way too complicated
+            //app, settings, tracker, artifactRegistry, browserHelper
+            await openWidget('link');
+            // let widget: MainAreaWidget;
+
+            // const content = "<div>hello</div>"
+
+            // widget = new MainAreaWidget({ content });
+            // const artifact = await browserHelper.currentItemArtifact();
+
+            // widget.update()
+          }
+        });
+
         registerTopMenu(app, mainMenu);
         registerContextMenu(app);
         registerCommandPalette(palette);
@@ -205,6 +221,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
 function registerTopMenu(app: JupyterFrontEnd, mainMenu: IMainMenu) {
   const menu = new Menu({ commands: app.commands });
   menu.addItem({ command: CommandIDs.create });
+  menu.addItem({ command: CommandIDs.link });
   menu.addItem({ command: CommandIDs.edit });
   menu.addItem({ command: CommandIDs.newVersion });
   menu.title.label = 'Share';
@@ -214,6 +231,7 @@ function registerTopMenu(app: JupyterFrontEnd, mainMenu: IMainMenu) {
 function registerCommandPalette(palette: ICommandPalette) {
   const category = 'Sharing';
   palette.addItem({ command: CommandIDs.create, category });
+  palette.addItem({ command: CommandIDs.link, category });
   palette.addItem({ command: CommandIDs.edit, category });
   palette.addItem({ command: CommandIDs.newVersion, category });
 }
@@ -226,6 +244,11 @@ function registerContextMenu(app: JupyterFrontEnd) {
 
   app.contextMenu.addItem({
     command: CommandIDs.create,
+    selector: selectorNotPublished,
+    rank: 1
+  });
+  app.contextMenu.addItem({
+    command: CommandIDs.link,
     selector: selectorNotPublished,
     rank: 1
   });
@@ -245,83 +268,7 @@ namespace CommandIDs {
   export const create = 'artifact-sharing:create';
   export const edit = 'artifact-sharing:edit';
   export const newVersion = 'artifact-sharing:newVersion';
-}
-
-class FileBrowserHelper {
-  constructor(browser: FileBrowser, artifactRegistry: IArtifactRegistry) {
-    this._browser = browser;
-    this._artifactRegistry = artifactRegistry;
-  }
-
-  canBeArtifact(item: Contents.IModel) {
-    return item && item.type === 'directory';
-  }
-
-  isOwnedArtifact(item: Contents.IModel) {
-    const artifact = this._artifactRegistry.getArtifactSync(item.path);
-    return artifact && artifact.ownership === 'own';
-  }
-
-  async currentItemArtifact() {
-    const item = this.currentItem();
-    if (!item || item.type !== 'directory') {
-      return null;
-    }
-    let artifact = await this._artifactRegistry.getArtifact(item.path);
-    if (!artifact) {
-      // Generate a new placeholder artifact for the given path.
-      artifact = {
-        title: '',
-        short_description: '',
-        authors: [],
-        linked_projects: [],
-        reproducibility: { enable_requests: false },
-        tags: [],
-        versions: [],
-        newLinks: [],
-        path: item.path,
-        ownership: 'fork'
-      };
-    }
-    return artifact;
-  }
-
-  currentItem() {
-    const selectedItems = toArray(this._browser.selectedItems());
-    if (selectedItems.length > 1) {
-      // Fail on multiple items selected
-      return null;
-    } else if (selectedItems.length === 1) {
-      return selectedItems[0];
-    }
-
-    return this._fakeCurrentRootItem();
-  }
-
-  /**
-   * Provides a fake Contents.IModel entity for the current directory the
-   * browser model is on. The browser model does not supply this over a public
-   * interface. For our purposes, we only really need the path anyways, so it
-   * is OK. Additionally, the model is always simple as it must necessarily
-   * be of type='directory'.
-   */
-  _fakeCurrentRootItem(): Contents.IModel {
-    const { path } = this._browser.model;
-    return {
-      content: null,
-      created: null,
-      format: 'json',
-      last_modified: null,
-      mimetype: null,
-      name: path,
-      path,
-      type: 'directory',
-      writable: true
-    };
-  }
-
-  private _browser: FileBrowser;
-  private _artifactRegistry: IArtifactRegistry;
+  export const link = 'artifact-sharing:link';
 }
 
 const fileBrowserFactoryPlugin: JupyterFrontEndPlugin<IFileBrowserFactory> = {
