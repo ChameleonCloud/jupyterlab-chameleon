@@ -78,8 +78,17 @@ function createOpener(
         urlFactory,
         artifactRegistry
       );
-      content.title.label =
-        workflow === 'upload' ? 'Package artifact' : 'Edit artifact';
+      switch(workflow){
+        case 'upload':
+          content.title.label = 'Package artifact';
+          break;
+        case 'edit':
+          content.title.label = 'Edit artifact';
+          break;
+        case 'link':
+          content.title.label = 'Link artifact';
+          break;
+      }
       widget = new MainAreaWidget({ content });
       widget.id = 'artifact-sharing';
     }
@@ -187,17 +196,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
           label: 'Link to existing artifact',
           isEnabled: enableCreate,
           async execute() {
-            // TODO don't openwidget at all, way too complicated
-            //app, settings, tracker, artifactRegistry, browserHelper
             await openWidget('link');
-            // let widget: MainAreaWidget;
-
-            // const content = "<div>hello</div>"
-
-            // widget = new MainAreaWidget({ content });
-            // const artifact = await browserHelper.currentItemArtifact();
-
-            // widget.update()
           }
         });
 

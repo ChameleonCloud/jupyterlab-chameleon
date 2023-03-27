@@ -146,9 +146,7 @@ export class ArtifactSharingComponent extends React.Component<ArtifactSharingCom
           errorMessage: `Failed to save artifact: ${e.message}`
         });
       }
-    } else if (this.props.workflow == 'link') {
     }
-
   }
 
   render(): JSX.Element {

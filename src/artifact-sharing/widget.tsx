@@ -8,6 +8,7 @@ import {
 } from './tokens';
 
 import { ArtifactSharingComponent } from './components/artifact-sharing-component';
+import { ArtifactLinkComponent } from './components/artifact-link-component';
 
 export class ArtifactSharingWidget extends ReactWidget {
   constructor(
@@ -25,17 +26,31 @@ export class ArtifactSharingWidget extends ReactWidget {
   }
 
   render(): JSX.Element {
-    return (
-      <ArtifactSharingComponent
-        initialArtifact={this._artifact}
-        workflow={this._workflow}
-        urlFactory={this._urlFactory}
-        artifactRegistry={this._artifactRegistry}
-        // Disposing of a widget added to a MainContentArea will cause the
-        // content area to also dispose of itself (close itself.)
-        onCancel={this.dispose.bind(this)}
-      />
-    );
+    if (this._workflow === "link"){
+      return (
+        <ArtifactLinkComponent
+          artifactRegistry={this._artifactRegistry}
+          initialArtifact={this._artifact}
+          workflow={this._workflow}
+          urlFactory={this._urlFactory}
+          // Disposing of a widget added to a MainContentArea will cause the
+          // content area to also dispose of itself (close itself.)
+          onCancel={this.dispose.bind(this)}
+        />
+      );
+    } else {
+      return (
+        <ArtifactSharingComponent
+          initialArtifact={this._artifact}
+          workflow={this._workflow}
+          urlFactory={this._urlFactory}
+          artifactRegistry={this._artifactRegistry}
+          // Disposing of a widget added to a MainContentArea will cause the
+          // content area to also dispose of itself (close itself.)
+          onCancel={this.dispose.bind(this)}
+        />
+      );
+    }
   }
 
   private _artifact: Artifact;

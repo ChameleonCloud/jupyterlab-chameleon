@@ -82,7 +82,9 @@ export interface IArtifactRegistry {
   newArtifactVersion(artifact: Artifact): Promise<ArtifactVersion>;
   updateArtifact(artifact: Artifact): Promise<Artifact>;
   getArtifacts(): Promise<Artifact[]>;
+  getRemoteArtifacts(): Promise<Artifact[]>;
   getArtifact(path: string): Promise<Artifact>;
   hasArtifactSync(path: string): boolean;
+  linkArtifact(path: string, uuid: string, version: string): Promise<Artifact>;
   getArtifactSync(path: string): Artifact | undefined;
 }
