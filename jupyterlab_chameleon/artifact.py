@@ -451,7 +451,7 @@ class ArtifactLinkHandler(APIHandler, ErrorResponder):
             path = body.pop("path")
             path = self._normalize_path(path)
             uuid = body.pop("uuid")
-            version = body.pop("version")
+            version = body.pop("version", None)
             local_artifact = LocalArtifact(
                 id=uuid,
                 path=path,

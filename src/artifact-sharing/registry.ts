@@ -91,7 +91,6 @@ export class ArtifactRegistry implements IArtifactRegistry {
         delete this._artifactsFetchPromise;
       }
     }
-    console.log(this._artifacts)
     return this._artifacts;
   }
 
@@ -111,12 +110,8 @@ export class ArtifactRegistry implements IArtifactRegistry {
       { method: 'POST', body: JSON.stringify({ path, uuid, version }) },
       this._serverSettings
     )
-    const updated = await Private.handleLinkResponse(res)
-    // Update _artifacts so it shows up as green in file list
-    let remote_artifact = (await this.getRemoteArtifacts()).find((a) => a.uuid == uuid)
-    console.log("remote_artifact")
-    console.log(remote_artifact)
-    this._artifacts.push(remote_artifact)
+    const updated = await Private.handleLinkResponse(res, path, await this.getRemoteArtifacts())
+    this._updateArtifacts(updated)
     return updated;
   }
 
@@ -246,12 +241,31 @@ namespace Private {
     return await res.json() as ArtifactVersionContents;
   }
 
-  export async function handleLinkResponse(res: Response): Promise<Artifact> {
+  export async function handleLinkResponse(res: Response, path: string, remote_artifacts: Artifact[]): Promise<Artifact> {
     if (res.status > 299) {
       const message = `HTTP error ${res.status} occured linking artifact`;
       throw new ServerConnection.ResponseError(res, message);
     }
-    return await res.json() as Artifact;
+    const resJSON = await res.json();
+    const remote_artifact = remote_artifacts.find((a) => a.uuid == resJSON.artifact_uuid)
+    // We must return an artifact with corrected path to show up in file explorer
+    return {
+      uuid: remote_artifact.uuid,
+      title: remote_artifact.title,
+      short_description: remote_artifact.short_description,
+      long_description: remote_artifact.long_description,
+      tags: remote_artifact.tags,
+      authors: remote_artifact.authors,
+      linked_projects: remote_artifact.linked_projects,
+      reproducibility: remote_artifact.reproducibility,
+      created_at: remote_artifact.created_at,
+      updated_at: remote_artifact.updated_at,
+      owner_urn: remote_artifact.owner_urn,
+      visibility: remote_artifact.visibility,
+      versions: remote_artifact.versions,
+      ownership: "own",
+      path: path,
+    };
   }
 
 }

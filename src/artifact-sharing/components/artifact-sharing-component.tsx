@@ -179,8 +179,6 @@ export class ArtifactSharingComponent extends React.Component<ArtifactSharingCom
             artifact={this.state.artifact} />
         );
       }
-    } else if (this.props.workflow == 'link') {
-      // TODO return something here instead of all this hacky stuff
     } else {
       formText = <EditArtifactText urlFactory={this.props.urlFactory} />;
       successText = (
