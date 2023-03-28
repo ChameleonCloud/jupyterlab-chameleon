@@ -90,14 +90,9 @@ def init_db(server_app: "NotebookApp", db: "DB"):
             with open(os.getenv("ARTIFACT_DIR_NAME_FILE"), "r") as f:
                 artifact_path = f.read().strip()
             store_trovi_artifact_data(
-                LocalArtifact(
-                    path=os.path.join(server_app.notebook_dir, artifact_path),
-                    id=artifact_urn,
-                    deposition_repo=None,
-                    ownership=os.getenv("ARTIFACT_OWNERSHIP"),
-                    artifact_uuid=os.getenv("ARTIFACT_UUID"),
-                    artifact_version_slug=os.getenv("ARTIFACT_VERSION_SLUG"),
-                )
+                os.path.join(server_app.notebook_dir, artifact_path),
+                os.getenv("ARTIFACT_UUID"),
+                os.getenv("ARTIFACT_VERSION_SLUG"),
             )
     except Exception:
         server_app.log.exception("Error initializing database")

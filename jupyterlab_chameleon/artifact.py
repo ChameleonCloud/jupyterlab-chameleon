@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import string
 import requests
 import tempfile
 
@@ -14,9 +15,8 @@ from requests import HTTPError
 from tornado import web
 from traitlets import Any, Tuple
 from traitlets.config import LoggingConfigurable
-from dataclasses import asdict
 
-from .db import DB, LocalArtifact, DuplicateArtifactError
+from .db import DB
 from .exception import (
     AuthenticationError,
     IllegalArchiveError,
@@ -452,17 +452,12 @@ class ArtifactLinkHandler(APIHandler, ErrorResponder):
             path = self._normalize_path(path)
             uuid = body.pop("uuid")
             version = body.pop("version", None)
-            local_artifact = LocalArtifact(
-                id=uuid,
-                path=path,
-                deposition_repo=None,
-                ownership="own",
-                artifact_uuid=uuid,
-                artifact_version_slug=version,
-            )
-            store_trovi_artifact_data(local_artifact)
+            store_trovi_artifact_data(path, uuid, version)
             self.set_status(201)
-            self.write(asdict(local_artifact))
+            self.write({
+                "uuid": uuid,
+                "version_slug": version,
+            })
             return self.finish()
         except PermissionError as err:
             return self.error_response(403, str(err))
@@ -521,24 +516,14 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             # artifact. We check to see which one it returned based on if we
             # had a uid in the first place
             if artifact.get("uuid"):
-                local_artifact = LocalArtifact(
-                    id=contents_urn,
-                    path=artifact["path"],
-                    deposition_repo=None,
-                    ownership=artifact["ownership"],
-                    artifact_uuid=artifact["uuid"],
-                    artifact_version_slug=artifact["versions"][0]["slug"],
-                )
+                version = artifact["versions"][0]["slug"]
             else:
-                local_artifact = LocalArtifact(
-                    id=contents_urn,
-                    path=artifact["path"],
-                    deposition_repo=None,
-                    ownership=artifact["ownership"],
-                    artifact_uuid=body["uuid"],
-                    artifact_version_slug=artifact["slug"],
-                )
-            store_trovi_artifact_data(local_artifact)
+                version = artifact["slug"]
+            store_trovi_artifact_data(
+                path,
+                artifact["uuid"],
+                version,
+            )
 
             self.set_status(201)
             self.write(artifact)
@@ -596,16 +581,14 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
         self.check_xsrf_cookie()
 
         try:
-            artifacts = self.api_client.list()
+            remote_artifacts = self.api_client.list()
 
             # The 'id' of local artifacts == a version UUID (or ID, for legacy versions.)
-            local_contents = {
-                la.id: la.path for la in self.db.list_artifacts() + find_local_trovi_artifacts()
-            }
+            local_contents = {la.id: la.path for la in self.db.list_artifacts()}
 
             # Find artifacts that map to local workspace
             local_artifacts = []
-            for artifact in artifacts:
+            for artifact in remote_artifacts:
                 for version in artifact["versions"]:
                     search_keys = [version["contents"]["urn"]]
                     # Handle legacy-linked artifacts
@@ -629,13 +612,12 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
 
                 # Find artifacts from .trovi.json files
                 for local_artifact in find_local_trovi_artifacts():
-                    if artifact["uuid"] == local_artifact.artifact_uuid:
-                        artifact["path"] = local_artifact.path
-                        artifact["ownership"] = local_artifact.ownership
+                    if artifact["uuid"] == local_artifact["uuid"]:
+                        artifact["path"] = local_artifact["path"]
                         local_artifacts.append(artifact)
 
             self.set_status(200)
-            self.write({"artifacts": local_artifacts, "remote_artifacts": artifacts})
+            self.write({"artifacts": local_artifacts, "remote_artifacts": remote_artifacts})
             return self.finish()
         except json.JSONDecodeError as err:
             return self.error_response(400, str(err))
@@ -669,7 +651,7 @@ class ArtifactMetricHandler(APIHandler, ErrorResponder):
         try:
             artifact_path = body.pop("path", "")
             local_contents = {}
-            for la in self.db.list_artifacts() + find_local_trovi_artifacts():
+            for la in self.db.list_artifacts():
                 p = la.path
                 # Remove prefix `/home/$USER/work` if applicable, we want to
                 # normalize relative to `/work` (notebook_dir)
@@ -682,6 +664,10 @@ class ArtifactMetricHandler(APIHandler, ErrorResponder):
             if artifact_path in local_contents:
                 uuid = local_contents[artifact_path][0]
                 version_slug = local_contents[artifact_path][1]
+            for la in find_local_trovi_artifacts():
+                if artifact_path == la["path"]:
+                    uuid = la["uuid"]
+                    version_slug = la["version_slug"]
         except Exception as err:
             self.log.exception("Unable to get artifact metadata")
             return self.error_response(500, str(err))
@@ -723,17 +709,19 @@ def find_local_trovi_artifacts():
         try:
             with open(config_path) as f:
                 config = json.load(f)
-                artifacts.append(LocalArtifact(**config))
-                # Ignore the path stored in the file, and use the true path instead
-                artifacts[-1].path = artifact_path
+                config["path"] = artifact_path
+                artifacts.append(config)
         except:
             # For any issue loading the file, we just ignore it
             LOG.warning("Could not load artifact from '%s'", config_path)
     return artifacts
 
-def store_trovi_artifact_data(local_artifact: LocalArtifact):
+def store_trovi_artifact_data(path: string, uuid: string, version: string):
     """
     Writes an artifact .trovi.json file
     """
-    with open(os.path.join(local_artifact.path, ".trovi.json"), "w") as f:
-        json.dump(asdict(local_artifact), f)
+    with open(os.path.join(path, ".trovi.json"), "w") as f:
+        json.dump({
+            "uuid": uuid,
+            "version_slug": version,
+        }, f)

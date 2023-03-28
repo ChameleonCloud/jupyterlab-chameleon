@@ -247,7 +247,7 @@ namespace Private {
       throw new ServerConnection.ResponseError(res, message);
     }
     const resJSON = await res.json();
-    const remote_artifact = remote_artifacts.find((a) => a.uuid == resJSON.artifact_uuid)
+    const remote_artifact = remote_artifacts.find((a) => a.uuid == resJSON.uuid)
     // We must return an artifact with corrected path to show up in file explorer
     return {
       uuid: remote_artifact.uuid,

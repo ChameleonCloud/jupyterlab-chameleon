@@ -14,11 +14,11 @@ DATABASE_NAME = "chameleon"
 
 @dataclass
 class LocalArtifact:
-    # LEGACY: The _contents_ ID for the currently checked-out version of the artifact.
+    # The _contents_ ID for the currently checked-out version of the artifact.
     id: str
     # The path at which the artifact is checked out.
     path: str
-    # LEGACY: The contents repo (named 'deposition' for legacy reasons)
+    # The contents repo (named 'deposition' for legacy reasons)
     deposition_repo: str
     # Whether the user owns the artifact or not (e.g., "own", "fork")
     ownership: str
