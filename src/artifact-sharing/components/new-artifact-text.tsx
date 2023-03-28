@@ -33,7 +33,7 @@ export class NewArtifactText extends React.Component<ArtifactText.IProps> {
         <p>
           To learn more about Trovi, and artifact packaging, please refer to the{' '}
           <a
-            href="https://chameleoncloud.readthedocs.io"
+            href="https://chameleoncloud.readthedocs.io/en/latest/technical/sharing.html"
             rel="noreferrer"
             target="_blank"
           >
