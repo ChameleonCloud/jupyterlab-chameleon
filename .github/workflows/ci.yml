@@ -79,12 +79,14 @@ jobs:
 
       - name: Build Container
         id: docker_build
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: "docker.chameleoncloud.org/jupyterhub-user:${GITHUB_SHA::6}"
+          images: docker.chameleoncloud.org/jupyterhub-user
+          tags: |
+            type=sha
           target: release
           cache-from: type=gha
           cache-to: type=gha,mode=max
