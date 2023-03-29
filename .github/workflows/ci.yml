@@ -64,6 +64,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: docker.chameleoncloud.org/jupyterhub-user
+          tags: |
+            type=sha
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
@@ -84,9 +92,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          images: docker.chameleoncloud.org/jupyterhub-user
-          tags: |
-            type=sha
+          tags: ${{ steps.meta.outputs.tags }}
           target: release
           cache-from: type=gha
           cache-to: type=gha,mode=max
