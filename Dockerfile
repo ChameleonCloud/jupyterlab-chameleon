@@ -1,4 +1,4 @@
-FROM jupyter/minimal-notebook:lab-3.4.7 as base
+FROM jupyter/minimal-notebook:lab-3.6.1 as base
 
 USER root
 
@@ -68,13 +68,8 @@ RUN mkdir -p /etc/jupyter/serverroot
 COPY scripts/serverroot/* /etc/jupyter/serverroot/
 
 COPY scripts/bashrc.d /etc/jupyter/bashrc.d
-#RUN chown eovyan:100 -R /home/jovyan/.bashrc.d
-#COPY scripts/start-notebook-dev.sh /usr/local/bin/
-
-#RUN mkdir -p /data && chown jovyan:100 -R /data
 
 FROM release as dev
 
-COPY . /ext
-RUN pip install /ext
-#RUN mkdir -p /work
+# Copy this script to run after all other set up runs.
+COPY scripts/start-notebook-dev.sh /usr/local/bin/before-notebook.d/999_start_dev.sh

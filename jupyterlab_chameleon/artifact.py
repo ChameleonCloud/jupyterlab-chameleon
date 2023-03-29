@@ -1,9 +1,11 @@
+import pathlib
 import shutil
 
 import json
 import logging
 import os
 import re
+import string
 import requests
 import tempfile
 
@@ -14,7 +16,7 @@ from tornado import web
 from traitlets import Any, Tuple
 from traitlets.config import LoggingConfigurable
 
-from .db import DB, LocalArtifact, DuplicateArtifactError
+from .db import DB
 from .exception import (
     AuthenticationError,
     IllegalArchiveError,
@@ -138,7 +140,7 @@ def default_prepare_list():
 class ArtifactArchiver(LoggingConfigurable):
     ignored_file_pattern = Tuple(
         config=True,
-        default_value=(".chameleon", ".ipynb_checkpoints", ".git", ".ssh"),
+        default_value=(".chameleon", ".ipynb_checkpoints", ".git", ".ssh", ".trovi.json"),
         help=(
             "A tuple of glob patterns of files/directories to ignore when packaging"
             "the archive."
@@ -431,6 +433,45 @@ class ArtifactAPIClient(LoggingConfigurable):
         return req
 
 
+class ArtifactLinkHandler(APIHandler, ErrorResponder):
+    def initialize(self, notebook_dir: str = None):
+        self.api_client = ArtifactAPIClient(config=self.config)
+        self.notebook_dir = notebook_dir or "."
+
+    def _normalize_path(self, path):
+        if not path.startswith("/"):
+            path = os.path.join(self.notebook_dir, path)
+        return os.path.normpath(path)
+
+    @web.authenticated
+    def post(self):
+        self.check_xsrf_cookie()
+        try:
+            body = json.loads(self.request.body.decode("utf-8"))
+            path = body.pop("path")
+            path = self._normalize_path(path)
+            uuid = body.pop("uuid")
+            version = body.pop("version", None)
+            store_trovi_artifact_data(path, uuid, version)
+            self.set_status(201)
+            self.write({
+                "uuid": uuid,
+                "version_slug": version,
+            })
+            return self.finish()
+        except PermissionError as err:
+            return self.error_response(403, str(err))
+        except (AuthenticationError, Unauthorized) as err:
+            return self.error_response(401, str(err))
+        except HTTPError as err:
+            return self.error_response(
+                err.response.status_code, str(err.response.content, "utf-8")
+            )
+        except Exception as err:
+            self.log.exception("An unknown error occurred")
+            return self.error_response(500, str(err))
+
+
 class ArtifactMetadataHandler(APIHandler, ErrorResponder):
     LEGACY_ID_LINK_PREFIX = "urn:trovi:artifact:chameleon:legacy:"
 
@@ -475,27 +516,14 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             # artifact. We check to see which one it returned based on if we
             # had a uid in the first place
             if artifact.get("uuid"):
-                local_artifact = LocalArtifact(
-                    id=contents_urn,
-                    path=artifact["path"],
-                    deposition_repo=None,
-                    ownership=artifact["ownership"],
-                    artifact_uuid=artifact["uuid"],
-                    artifact_version_slug=artifact["versions"][0]["slug"],
-                )
+                version = artifact["versions"][0]["slug"]
             else:
-                local_artifact = LocalArtifact(
-                    id=contents_urn,
-                    path=artifact["path"],
-                    deposition_repo=None,
-                    ownership=artifact["ownership"],
-                    artifact_uuid=body["uuid"],
-                    artifact_version_slug=artifact["slug"],
-                )
-            try:
-                self.db.insert_artifact(local_artifact)
-            except DuplicateArtifactError:
-                self.db.update_artifact(local_artifact)
+                version = artifact["slug"]
+            store_trovi_artifact_data(
+                path,
+                artifact["uuid"],
+                version,
+            )
 
             self.set_status(201)
             self.write(artifact)
@@ -553,14 +581,14 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
         self.check_xsrf_cookie()
 
         try:
-            artifacts = self.api_client.list()
+            remote_artifacts = self.api_client.list()
 
             # The 'id' of local artifacts == a version UUID (or ID, for legacy versions.)
             local_contents = {la.id: la.path for la in self.db.list_artifacts()}
 
             # Find artifacts that map to local workspace
             local_artifacts = []
-            for artifact in artifacts:
+            for artifact in remote_artifacts:
                 for version in artifact["versions"]:
                     search_keys = [version["contents"]["urn"]]
                     # Handle legacy-linked artifacts
@@ -582,8 +610,14 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
                             local_artifacts.append(artifact)
                             break
 
+                # Find artifacts from .trovi.json files
+                for local_artifact in find_local_trovi_artifacts():
+                    if artifact["uuid"] == local_artifact["uuid"]:
+                        artifact["path"] = local_artifact["path"]
+                        local_artifacts.append(artifact)
+
             self.set_status(200)
-            self.write({"artifacts": local_artifacts})
+            self.write({"artifacts": local_artifacts, "remote_artifacts": remote_artifacts})
             return self.finish()
         except json.JSONDecodeError as err:
             return self.error_response(400, str(err))
@@ -630,6 +664,10 @@ class ArtifactMetricHandler(APIHandler, ErrorResponder):
             if artifact_path in local_contents:
                 uuid = local_contents[artifact_path][0]
                 version_slug = local_contents[artifact_path][1]
+            for la in find_local_trovi_artifacts():
+                if artifact_path == la["path"]:
+                    uuid = la["uuid"]
+                    version_slug = la["version_slug"]
         except Exception as err:
             self.log.exception("Unable to get artifact metadata")
             return self.error_response(500, str(err))
@@ -656,3 +694,34 @@ class ArtifactMetricHandler(APIHandler, ErrorResponder):
         except Exception as err:
             self.log.exception("An unknown error occurred")
             return self.error_response(500, str(err))
+
+
+def find_local_trovi_artifacts():
+    """
+    Returns a list of all artifacts from .trovi.json files
+    """
+    info = [
+        (str(p), (str(str(p.relative_to("/work").parent))))
+        for p in pathlib.Path('/work').glob('**/.trovi.json')
+    ]
+    artifacts = []
+    for config_path, artifact_path in info:
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+                config["path"] = artifact_path
+                artifacts.append(config)
+        except:
+            # For any issue loading the file, we just ignore it
+            LOG.warning("Could not load artifact from '%s'", config_path)
+    return artifacts
+
+def store_trovi_artifact_data(path: string, uuid: string, version: string):
+    """
+    Writes an artifact .trovi.json file
+    """
+    with open(os.path.join(path, ".trovi.json"), "w") as f:
+        json.dump({
+            "uuid": uuid,
+            "version_slug": version,
+        }, f)

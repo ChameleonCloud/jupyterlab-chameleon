@@ -84,19 +84,35 @@ export class ArtifactRegistry implements IArtifactRegistry {
       }
 
       try {
-        this._artifacts = await this._artifactsFetchPromise;
+        this._artifacts = (await this._artifactsFetchPromise)[0];
+        this._remote_artifacts = (await this._artifactsFetchPromise)[1];
         this._artifactsFetched = true;
       } finally {
         delete this._artifactsFetchPromise;
       }
     }
-
     return this._artifacts;
+  }
+
+  async getRemoteArtifacts(): Promise<Artifact[]> {
+    await this.getArtifacts();
+    return this._remote_artifacts
   }
 
   async getArtifact(path: string): Promise<Artifact> {
     const artifacts = await this.getArtifacts();
     return artifacts.find(a => a.path === path);
+  }
+
+  async linkArtifact(path: string, uuid: string, version: string): Promise<Artifact> {
+    const res = await ServerConnection.makeRequest(
+      Private.getLinkUrl(this._serverSettings),
+      { method: 'POST', body: JSON.stringify({ path, uuid, version }) },
+      this._serverSettings
+    )
+    const updated = await Private.handleLinkResponse(res, path, await this.getRemoteArtifacts())
+    this._updateArtifacts(updated)
+    return updated;
   }
 
   getArtifactSync(path: string): Artifact {
@@ -109,8 +125,9 @@ export class ArtifactRegistry implements IArtifactRegistry {
 
   private _serverSettings = ServerConnection.makeSettings();
   private _artifacts = [] as Artifact[];
+  private _remote_artifacts = [] as Artifact[];
   private _artifactsFetched = false;
-  private _artifactsFetchPromise: Promise<Artifact[]>;
+  private _artifactsFetchPromise: Promise<Artifact[][]>;
   private _updateArtifacts(artifact: Artifact): void {
     const indexOf = this._artifacts.findIndex(
       ({ path }) => path === artifact.path
@@ -141,12 +158,20 @@ namespace Private {
     return URLExt.join.call(URLExt, ...parts);
   }
 
-  export async function handleListResponse(res: Response): Promise<Artifact[]> {
-    const { artifacts } = await res.json();
+  export function getLinkUrl(settings: ServerConnection.ISettings): string {
+    const parts = [settings.baseUrl, 'chameleon', 'link'];
+    return URLExt.join.call(URLExt, ...parts);
+  }
+
+  export async function handleListResponse(res: Response): Promise<Artifact[][]> {
+    const { artifacts, remote_artifacts } = await res.json();
     if (!artifacts || !Array.isArray(artifacts)) {
       throw new ServerConnection.ResponseError(res, 'Malformed response');
     }
-    return artifacts as Artifact[];
+    return [
+      artifacts as Artifact[], 
+      remote_artifacts as Artifact[]
+    ];
   }
 
   export async function handleUpdateResponse(res: Response): Promise<void> {
@@ -215,4 +240,32 @@ namespace Private {
 
     return await res.json() as ArtifactVersionContents;
   }
+
+  export async function handleLinkResponse(res: Response, path: string, remote_artifacts: Artifact[]): Promise<Artifact> {
+    if (res.status > 299) {
+      const message = `HTTP error ${res.status} occured linking artifact`;
+      throw new ServerConnection.ResponseError(res, message);
+    }
+    const resJSON = await res.json();
+    const remote_artifact = remote_artifacts.find((a) => a.uuid == resJSON.uuid)
+    // We must return an artifact with corrected path to show up in file explorer
+    return {
+      uuid: remote_artifact.uuid,
+      title: remote_artifact.title,
+      short_description: remote_artifact.short_description,
+      long_description: remote_artifact.long_description,
+      tags: remote_artifact.tags,
+      authors: remote_artifact.authors,
+      linked_projects: remote_artifact.linked_projects,
+      reproducibility: remote_artifact.reproducibility,
+      created_at: remote_artifact.created_at,
+      updated_at: remote_artifact.updated_at,
+      owner_urn: remote_artifact.owner_urn,
+      visibility: remote_artifact.visibility,
+      versions: remote_artifact.versions,
+      ownership: "own",
+      path: path,
+    };
+  }
+
 }

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from jupyter_server.utils import url_path_join
 
-from .artifact import ArtifactMetadataHandler
+from .artifact import ArtifactLinkHandler, ArtifactMetadataHandler, store_trovi_artifact_data
 from .db import LocalArtifact, DB
 from .heartbeat import HeartbeatHandler
 from ._version import __version__
@@ -43,6 +43,7 @@ def _load_jupyter_server_extension(server_app: "NotebookApp"):
     artifact_endpoint = url_path_join(base_endpoint, "artifacts")
     heartbeat_endpoint = url_path_join(base_endpoint, "heartbeat")
     metric_endpoint = url_path_join(base_endpoint, "metrics")
+    link_endpoint = url_path_join(base_endpoint, "link")
 
     db = DB(database=f"{notebook_dir}/.chameleon/chameleon.db")
 
@@ -57,6 +58,11 @@ def _load_jupyter_server_extension(server_app: "NotebookApp"):
             metric_endpoint,
             ArtifactMetricHandler,
             {"db": db, "notebook_dir": notebook_dir},
+        ),
+        (
+            link_endpoint,
+            ArtifactLinkHandler,
+            {"notebook_dir": notebook_dir},
         ),
     ]
     web_app.add_handlers(".*$", handlers)
@@ -83,15 +89,10 @@ def init_db(server_app: "NotebookApp", db: "DB"):
             # The wordir script saves the artifact dir name in a file in /tmp
             with open(os.getenv("ARTIFACT_DIR_NAME_FILE"), "r") as f:
                 artifact_path = f.read().strip()
-            db.insert_artifact(
-                LocalArtifact(
-                    path=os.path.join(server_app.notebook_dir, artifact_path),
-                    id=artifact_urn,
-                    deposition_repo=None,
-                    ownership=os.getenv("ARTIFACT_OWNERSHIP"),
-                    artifact_uuid=os.getenv("ARTIFACT_UUID"),
-                    artifact_version_slug=os.getenv("ARTIFACT_VERSION_SLUG"),
-                )
+            store_trovi_artifact_data(
+                os.path.join(server_app.notebook_dir, artifact_path),
+                os.getenv("ARTIFACT_UUID"),
+                os.getenv("ARTIFACT_VERSION_SLUG"),
             )
     except Exception:
         server_app.log.exception("Error initializing database")

@@ -10,3 +10,6 @@ cat >"$theme_settings" <<EOF
   //"theme": "Chameleon"
 }
 EOF
+
+# Ensure the NB_USER has permissions to the new files
+chown -R "$NB_USER:" "/home/$NB_USER/.jupyter"

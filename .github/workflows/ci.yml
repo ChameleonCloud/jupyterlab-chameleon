@@ -1,7 +1,9 @@
 name: CI
 
 on:
-  workflow_dispatch: {}
+  push:
+    branches:
+      - main
 
 jobs:
   test-module:
@@ -55,30 +57,7 @@ jobs:
         jupyter labextension list 2>&1 | grep -ie "@chameleoncloud/jupyterlab-chameleon.*OK"
         python -m jupyterlab.browser_check
 
-  publish-pypi:
-    needs: test-module
-    name: Build and publish Python distributions to PyPI
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@master
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.10"
-    - name: Install pypa/build
-      run: >-
-        python -m pip install build --user
-    - name: Build a binary wheel and a source tarball
-      run: >-
-        python -m build --sdist --wheel --outdir dist/ .
-    - name: Publish distribution to PyPI
-      if: startsWith(github.ref, 'refs/tags')
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        password: ${{ secrets.PYPI_API_TOKEN }}
-
   build-image:
-    needs: publish-pypi
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -105,7 +84,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-           "type=sha,prefix=docker.chameleoncloud.org/k8s_jupyterhub:"
+           "type=sha,prefix=docker.chameleoncloud.org/jupyterhub-user:"
           target: release
           cache-from: type=gha
           cache-to: type=gha,mode=max

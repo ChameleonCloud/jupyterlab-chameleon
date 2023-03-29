@@ -71,7 +71,7 @@ export type Artifact = {
   readonly path: string;
 }
 
-export type Workflow = 'upload' | 'edit';
+export type Workflow = 'upload' | 'edit' | 'link';
 
 export const IArtifactRegistry = new Token<IArtifactRegistry>(
   '@jupyterlab_zenodo:IZenodoRegistry'
@@ -82,7 +82,9 @@ export interface IArtifactRegistry {
   newArtifactVersion(artifact: Artifact): Promise<ArtifactVersion>;
   updateArtifact(artifact: Artifact): Promise<Artifact>;
   getArtifacts(): Promise<Artifact[]>;
+  getRemoteArtifacts(): Promise<Artifact[]>;
   getArtifact(path: string): Promise<Artifact>;
   hasArtifactSync(path: string): boolean;
+  linkArtifact(path: string, uuid: string, version: string): Promise<Artifact>;
   getArtifactSync(path: string): Artifact | undefined;
 }
