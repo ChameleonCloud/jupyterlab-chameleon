@@ -84,8 +84,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-           "type=sha,prefix=docker.chameleoncloud.org/jupyterhub-user:"
+          images: "docker.chameleoncloud.org/jupyterhub-user:${GITHUB_SHA::6}"
           target: release
           cache-from: type=gha
           cache-to: type=gha,mode=max
