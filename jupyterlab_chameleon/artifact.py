@@ -614,6 +614,8 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
                 for local_artifact in find_local_trovi_artifacts():
                     if artifact["uuid"] == local_artifact["uuid"]:
                         artifact["path"] = local_artifact["path"]
+                        # TODO we should check roles eventually
+                        artifact["ownership"] = "own"
                         local_artifacts.append(artifact)
 
             self.set_status(200)
