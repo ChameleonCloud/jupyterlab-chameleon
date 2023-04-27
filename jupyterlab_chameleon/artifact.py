@@ -517,13 +517,18 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             # had a uid in the first place
             if artifact.get("uuid"):
                 version = artifact["versions"][0]["slug"]
+                store_trovi_artifact_data(
+                    path,
+                    artifact["uuid"],
+                    version,
+                )
             else:
                 version = artifact["slug"]
-            store_trovi_artifact_data(
-                path,
-                artifact["uuid"],
-                version,
-            )
+                store_trovi_artifact_data(
+                    path,
+                    body["uuid"],
+                    version,
+                )
 
             self.set_status(201)
             self.write(artifact)
