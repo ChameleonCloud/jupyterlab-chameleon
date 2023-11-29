@@ -16,4 +16,5 @@ git+https://github.com/ChameleonCloud/python-zunclient@chameleoncloud/xena#egg=p
 # ChameleonCloud-provided
 git+https://github.com/ChameleonCloud/jupyterlab-chameleon@main
 python-chi~=0.17.6
-
+PyYAML<5.4
+paramiko>=2.9.0
