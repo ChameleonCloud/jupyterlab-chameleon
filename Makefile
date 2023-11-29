@@ -1,5 +1,5 @@
-DOCKER_REGISTRY = docker.chameleoncloud.org
-IMAGE_NAME = jupyterhub-user
+DOCKER_REGISTRY = ghcr.io/chameleoncloud
+IMAGE_NAME = jupyterlab-chameleon
 DEV_TARGET = dev
 RELEASE_TARGET = release
 RELEASE_PLATFORM = linux/amd64
@@ -23,7 +23,7 @@ watch:
 
 .PHONY: notebook-build
 notebook-build:
-	docker build -t docker.chameleoncloud.org/jupyterhub-user:dev .
+	docker build -t ghcr.io/chameleoncloud/jupyterlab-chameleon:dev .
 
 .PHONY: hub-build-release
 notebook-build-release:
@@ -31,5 +31,5 @@ notebook-build-release:
 
 .PHONY: notebook-publish
 notebook-publish:
-	docker build --no-cache --platform linux/amd64 -t docker.chameleoncloud.org/jupyterhub-user:dev .
-	docker push docker.chameleoncloud.org/jupyterhub-user:dev
+	docker build --no-cache --platform linux/amd64 -t ghcr.io/chameleoncloud/jupyterlab-chameleon:dev .
+	docker push ghcr.io/chameleoncloud/jupyterlab-chameleon:dev

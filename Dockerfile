@@ -50,7 +50,7 @@ COPY scripts/chi-requirements.txt /tmp/chi-requirements.txt
 ARG openstack_release=xena
 RUN curl -L -Sso /upper-constraints.txt "https://raw.githubusercontent.com/openstack/requirements/stable/${openstack_release}/upper-constraints.txt"
 # Unconstrained *client to avoid issues with git install
-RUN python3 -m pip install --no-cache -r /tmp/chi-requirements.txt -c <(grep -v -E 'pyzmq|packaging|blazarclient|heatclient|zunclient' /upper-constraints.txt)
+RUN python3 -m pip install --no-cache -r /tmp/chi-requirements.txt -c <(grep -v -E 'pyzmq|packaging|blazarclient|heatclient|zunclient|PyYAML|paramiko' /upper-constraints.txt)
 RUN rm -f /tmp/chi-requirements.txt /upper-constraints.txt
 
 # FIXME(jason): this should not be necessary, it should automatically be enabled on install.
