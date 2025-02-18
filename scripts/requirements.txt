@@ -2,7 +2,6 @@
 ipyleaflet~=0.14
 ipywidgets~=7.5
 tqdm~=4.0
-jupyterlab-git~=0.41.0
 
 # IPython kernels
 bash_kernel
