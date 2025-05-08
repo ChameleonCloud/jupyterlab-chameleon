@@ -1,4 +1,4 @@
-FROM jupyter/minimal-notebook:lab-3.6.1 as base
+FROM jupyter/minimal-notebook:lab-4.4.2 as base
 
 USER root
 
