@@ -9,12 +9,12 @@ python-openstackclient
 python-swiftclient
 
 # Chameleon forks
-git+https://github.com/ChameleonCloud/python-blazarclient@chameleoncloud/xena#egg=python-blazarclient
-git+https://github.com/ChameleonCloud/python-heatclient@chameleoncloud/xena#egg=python-heatclient
-git+https://github.com/ChameleonCloud/python-zunclient@chameleoncloud/xena#egg=python-zunclient
+git+https://github.com/ChameleonCloud/python-blazarclient
+git+https://github.com/ChameleonCloud/python-heatclient
+git+https://github.com/ChameleonCloud/python-zunclient
 
 # ChameleonCloud-provided
 git+https://github.com/ChameleonCloud/jupyterlab-chameleon@main
-python-chi~=1.1.0
-PyYAML<5.4
-paramiko>=2.9.0
+python-chi
+PyYAML
+paramiko

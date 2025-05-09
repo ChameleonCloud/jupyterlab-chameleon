@@ -24,8 +24,11 @@ RUN apt-get update --yes && \
   moreutils \
   # git-over-ssh
   openssh-client \
+  npm \
+  nodejs \
   rsync && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
+
 
 
 # JupyterLab extensions
