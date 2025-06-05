@@ -22,9 +22,5 @@ pyreadline
 # https://github.com/jupyter/jupyter_client/issues/702 is addressed.
 pyzmq~=22.2.0
 
-# FIXME(jason):
-# Currently needed for custom forks of OS clients to install
-packaging>=20.0
-
 # For installing dev extensions
 jupyter-packaging
