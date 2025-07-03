@@ -1,4 +1,4 @@
-FROM quay.io/jupyter/minimal-notebook:lab-4.4.1 as base
+FROM quay.io/jupyter/minimal-notebook:lab-4.4.1 AS base
 
 USER root
 
@@ -46,7 +46,7 @@ RUN rm -f /tmp/notebook-requirements.txt
 
 RUN python3 -m bash_kernel.install
 
-FROM base as release
+FROM base AS release
 
 COPY scripts/chi-requirements.txt /tmp/chi-requirements.txt
 
@@ -70,7 +70,7 @@ COPY scripts/serverroot/* /etc/jupyter/serverroot/
 
 COPY scripts/bashrc.d /etc/jupyter/bashrc.d
 
-FROM release as dev
+FROM release AS dev
 
 # Copy this script to run after all other set up runs.
 COPY scripts/start-notebook-dev.sh /usr/local/bin/before-notebook.d/999_start_dev.sh
