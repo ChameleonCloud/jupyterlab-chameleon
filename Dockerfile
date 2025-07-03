@@ -1,4 +1,4 @@
-FROM jupyter/minimal-notebook:lab-3.6.1 AS base
+FROM quay.io/jupyter/minimal-notebook:lab-4.4.1 AS base
 
 USER root
 
@@ -24,8 +24,11 @@ RUN apt-get update --yes && \
   moreutils \
   # git-over-ssh
   openssh-client \
+  npm \
+  nodejs \
   rsync && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
+
 
 
 # JupyterLab extensions
