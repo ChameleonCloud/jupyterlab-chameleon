@@ -478,7 +478,7 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
     def initialize(self, db: DB = None, notebook_dir: str = None):
         self.api_client = ArtifactAPIClient(config=self.config)
         self.db = db
-        self.notebook_dir = notebook_dir or "."
+        self.notebook_dir = "/work"
 
     def _normalize_path(self, path):
         if not path.startswith("/"):
