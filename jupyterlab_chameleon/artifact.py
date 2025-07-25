@@ -436,7 +436,7 @@ class ArtifactAPIClient(LoggingConfigurable):
 class ArtifactLinkHandler(APIHandler, ErrorResponder):
     def initialize(self, notebook_dir: str = None):
         self.api_client = ArtifactAPIClient(config=self.config)
-        self.notebook_dir = notebook_dir or "."
+        self.notebook_dir = notebook_dir or "/work"
 
     def _normalize_path(self, path):
         if not path.startswith("/"):
