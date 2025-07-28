@@ -54,6 +54,9 @@ ARG openstack_release=xena
 RUN python3 -m pip install --no-cache -r /tmp/chi-requirements.txt
 RUN rm -f /tmp/chi-requirements.txt
 
+COPY . /ext
+RUN pip install /ext
+
 # FIXME(jason): this should not be necessary, it should automatically be enabled on install.
 RUN jupyter serverextension enable jupyterlab_chameleon
 

@@ -14,7 +14,6 @@ git+https://github.com/ChameleonCloud/python-heatclient
 git+https://github.com/ChameleonCloud/python-zunclient
 
 # ChameleonCloud-provided
-git+https://github.com/ChameleonCloud/jupyterlab-chameleon@main
 python-chi
 PyYAML
 paramiko
