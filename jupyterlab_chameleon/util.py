@@ -66,15 +66,18 @@ def refresh_access_token(source_ident=None) -> 'tuple[str,int]':
     Raises:
         AuthenticationError: if the access token cannot be refreshed.
     """
-    res = call_jupyterhub_api(
-        f"users/{os.getenv('JUPYTERHUB_USER')}", query=[('source', source_ident)])
-    access_token = res.get("auth_state").get('access_token')
-    expires_at = res.get("auth_state").get('expires_at')
+    try:
+        res = call_jupyterhub_api(
+            f"users/{os.getenv('JUPYTERHUB_USER')}", query=[('source', source_ident)])
+        access_token = res.get("auth_state").get('access_token')
+        expires_at = res.get("auth_state").get('expires_at')
 
-    should_refresh = expires_at - time.time() < 120
-    if not access_token or should_refresh:
-        raise AuthenticationError(f'Failed to get access token: {res}')
-
+        should_refresh = expires_at - time.time() < 120
+        if not access_token or should_refresh:
+            raise AuthenticationError(f'Failed to get access token: {res}')
+    except Exception as err:
+        # If any other issue occurs here, just re-auth
+        raise AuthenticationError(f'Failed to get access token: {err}') from err
     return access_token, expires_at
 
 
