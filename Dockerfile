@@ -57,6 +57,10 @@ RUN rm -f /tmp/chi-requirements.txt
 # FIXME(jason): this should not be necessary, it should automatically be enabled on install.
 RUN jupyter serverextension enable jupyterlab_chameleon
 
+# System-level JupyterLab setting overrides.
+# https://jupyterlab.readthedocs.io/en/stable/user/directories.html#overrides-json
+COPY scripts/overrides.json /opt/conda/share/jupyter/lab/settings/overrides.json
+
 #
 # Notebook start hooks
 #
