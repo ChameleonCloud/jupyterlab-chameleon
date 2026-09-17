@@ -591,6 +591,8 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
             # The 'id' of local artifacts == a version UUID (or ID, for legacy versions.)
             local_contents = {la.id: la.path for la in self.db.list_artifacts()}
 
+            trovi_json_artifacts = find_local_trovi_artifacts()
+
             # Find artifacts that map to local workspace
             local_artifacts = []
             for artifact in remote_artifacts:
@@ -616,7 +618,7 @@ class ArtifactMetadataHandler(APIHandler, ErrorResponder):
                             break
 
                 # Find artifacts from .trovi.json files
-                for local_artifact in find_local_trovi_artifacts():
+                for local_artifact in trovi_json_artifacts:
                     if artifact["uuid"] == local_artifact["uuid"]:
                         artifact["path"] = local_artifact["path"]
                         # TODO we should check roles eventually
